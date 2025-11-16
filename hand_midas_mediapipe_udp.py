@@ -1,18 +1,11 @@
 # file: hand_midas_mediapipe_udp.py
-# 推荐环境 (CPU 也可跑):
+# CPU 也能跑的配置：
 #   pip install opencv-python mediapipe numpy
 #   pip install torch torchvision --index-url https://download.pytorch.org/whl/cpu
 #   pip install timm
-#
-# 功能摘要：
-# 1) MediaPipe 每帧检测手部关键点；
-# 2) MiDaS 小模型在“后台线程”做单目深度估计（异步 + 可降频），并与 MediaPipe z 融合；
-# 3) 按 'c' 进入稳健标定：自动采样多帧 fused(wrist)，输入真实距离(米) -> 得到 scale；
-# 4) 输出 JSON 通过 UDP 发给 Unity，包含 landmarks 以及每只手的 wrist_z_m / palm_center_z_m；
-# 5) 屏幕 HUD 显示 FPS、scale、第一只手的 wrist 距离(米)。
 
 import os
-# 限制底层线程，避免 CPU 线程争用（要在导入 numpy/torch 之前设置更稳）
+# 减少 CPU 线程争用（需在导入数值库之前设置）
 os.environ.setdefault("OMP_NUM_THREADS", "1")
 os.environ.setdefault("MKL_NUM_THREADS", "1")
 
@@ -23,64 +16,65 @@ import socket
 import numpy as np
 import threading
 import queue
+from collections import deque
 
 import mediapipe as mp
 
-# ---- 尝试加载 torch / timm（若失败将自动退化为“纯 MediaPipe”模式） ----
+# ---- 可选：尝试加载 torch / timm（失败则退化为纯 MediaPipe） ----
 USE_MIDAS = True
 try:
     import torch
     import torch.nn.functional as F
     import warnings
     warnings.filterwarnings("ignore", category=UserWarning)
-    torch.set_num_threads(1)  # 减少 CPU 线程争用
+    torch.set_num_threads(1)
 except Exception as e:
     print("[WARN] 未能加载 torch，切换到纯 MediaPipe 模式：", repr(e))
     USE_MIDAS = False
 
 # ---------------- MiDaS 加载（小模型） ----------------
 def load_midas(device):
-    # 使用 MiDaS_small （输入侧 256，速度更快）
+    # 使用 MiDaS_small：速度更快
     midas = torch.hub.load("intel-isl/MiDaS", "MiDaS_small")
     midas.to(device).eval()
     transforms = torch.hub.load("intel-isl/MiDaS", "transforms")
     midas_transform = transforms.small_transform
     return midas, midas_transform
 
-# 将 midas_transform 的输出规整为 [B,C,H,W] 的 torch.Tensor
 def to_bchw_on_device(transformed, device):
+    """把 midas_transform 的输出规整为 [B,C,H,W] 的 tensor，并移动到 device。"""
     if isinstance(transformed, (tuple, list)):
         tensor = transformed[0]
     elif isinstance(transformed, dict):
         tensor = transformed.get("image", next(iter(transformed.values())))
     else:
         tensor = transformed
-
     if not torch.is_tensor(tensor):
         tensor = torch.tensor(tensor)
-
-    if tensor.ndim == 3:      # (C,H,W)
-        tensor = tensor.unsqueeze(0)  # -> (1,C,H,W)
-    elif tensor.ndim == 4:    # (B,C,H,W)
-        pass
-    else:
+    if tensor.ndim == 3:
+        tensor = tensor.unsqueeze(0)  # (C,H,W) -> (1,C,H,W)
+    elif tensor.ndim != 4:
         raise RuntimeError(f"[MiDaS] Unexpected ndim: {tensor.ndim}, shape={tuple(tensor.shape)}")
-
     return tensor.to(device)
 
-# 前景：MiDaS 后台线程，异步计算 depth_map（HxW, numpy float32 in [0,1]）
 class MidasWorker:
+    """
+    后台线程：异步计算 MiDaS raw 深度（不做逐帧 min-max 归一化）。
+    仅保留最新帧；可设置 frame_skip 降频；输出 raw 相对深度（跨帧一致）。
+    """
     def __init__(self, expected_size_hw):
         self.enabled = USE_MIDAS
         self.device = None
         self.model = None
         self.transform = None
-        self.queue = queue.Queue(maxsize=1)    # 仅保留最新帧，丢弃旧帧，避免延迟累积
+        self.queue = queue.Queue(maxsize=1)
         self.shared = {"depth": None, "ts": 0.0}
         self.stop_flag = False
         self.thread = None
-        self.expected_size = expected_size_hw  # (H, W) 用于上采样至摄像头分辨率
-        self.frame_skip = 3                    # 可调：后台只处理每第 N 次送来的帧
+        self.expected_size = expected_size_hw  # (H, W)
+        self.frame_skip = 3
+        self._ema = None
+        self.ema_alpha = 0.2  # 轻微 EMA 平滑
 
     def start(self):
         if not self.enabled:
@@ -97,10 +91,9 @@ class MidasWorker:
             self.thread.join(timeout=1.0)
 
     def submit(self, frame_rgb):
-        """主线程调用：提交一帧 RGB（H,W,3 uint8），只保留最新。"""
+        """提交一帧 RGB（H,W,3），仅保留最新。"""
         if not self.enabled:
             return
-        # 清空旧帧，放入新帧（非阻塞）
         try:
             while not self.queue.empty():
                 self.queue.get_nowait()
@@ -109,7 +102,7 @@ class MidasWorker:
             pass
 
     def latest_depth(self):
-        """主线程读取：返回最新的 depth_map（HxW np.float32 [0,1]）或 None。"""
+        """返回最新 raw depth（HxW np.float32）或 None。"""
         return self.shared["depth"]
 
     def _run(self):
@@ -122,26 +115,21 @@ class MidasWorker:
                 continue
 
             cnt += 1
-            # 降频：只处理每 N 帧
             if (cnt % self.frame_skip) != 0:
                 continue
 
-            # 变换与前向
             try:
-                # transform 期望 RGB；transform 内部会 resize 到模型输入尺寸
                 transformed = self.transform(frame)
                 input_tensor = to_bchw_on_device(transformed, self.device)
 
                 with torch.no_grad():
                     pred = self.model(input_tensor)
-                    # 兼容各种输出形状
                     if pred.ndim == 4 and pred.shape[1] == 1:
                         pred = pred[:, 0, :, :]    # (B,H,W)
                     elif pred.ndim == 4:
                         pred = pred.mean(dim=1)    # (B,H,W)
                     pred = pred[0]                 # (H_out, W_out)
 
-                    # 上采样到摄像头分辨率 (H,W)
                     pred = F.interpolate(
                         pred.unsqueeze(0).unsqueeze(0),
                         size=(H, W),
@@ -149,20 +137,88 @@ class MidasWorker:
                         align_corners=False
                     ).squeeze()
 
-                depth = pred.detach().cpu().numpy().astype(np.float32)
-                # 归一化为 [0,1]，只要相对深度即可
-                dmin, dmax = depth.min(), depth.max()
-                depth = (depth - dmin) / (dmax - dmin + 1e-9)
+                depth_raw = pred.detach().cpu().numpy().astype(np.float32)
+                # 不做 per-frame min-max；可选 EMA 平滑
+                if self.ema_alpha > 0.0:
+                    if self._ema is None:
+                        self._ema = depth_raw
+                    else:
+                        self._ema = (1.0 - self.ema_alpha) * self._ema + self.ema_alpha * depth_raw
+                    out = self._ema
+                else:
+                    out = depth_raw
 
-                self.shared["depth"] = depth
+                self.shared["depth"] = out
                 self.shared["ts"] = time.time()
 
             except Exception as e:
-                # 出错则禁用 MiDaS，回退纯 MediaPipe
                 print("[WARN] MiDaS 线程出错，切换纯 MediaPipe：", repr(e))
                 self.enabled = False
                 self.shared["depth"] = None
                 break
+
+# ---------------- 逆深度多点标定器 ----------------
+class InvDepthCalibrator:
+    """
+    拟合：1/Z = p * f + q   ->   Z = 1 / (p*f + q)
+    f 为融合后的“接近度”特征（越近越大）：来自 MiDaS raw & MediaPipe z 的加权。
+    """
+    def __init__(self):
+        self.samples = []   # list[(f, Z)]
+        self.p = None
+        self.q = None
+
+    def reset(self):
+        self.samples.clear()
+        self.p = None
+        self.q = None
+
+    def add_sample(self, f, Z):
+        if f is None or Z is None or Z <= 1e-6:
+            return False
+        self.samples.append((float(f), float(Z)))
+        return True
+
+    def undo(self):
+        if self.samples:
+            self.samples.pop()
+
+    def ready(self):
+        return (self.p is not None) and (self.q is not None)
+
+    def fit(self):
+        """最小二乘：令 y=1/Z，则 y = p*f + q，至少 2 个点（建议 ≥3）。"""
+        if len(self.samples) < 2:
+            return False
+        X = []
+        y = []
+        for f, Z in self.samples:
+            X.append([f, 1.0])
+            y.append(1.0 / max(Z, 1e-6))
+        X = np.asarray(X, dtype=np.float64)   # (N,2)
+        y = np.asarray(y, dtype=np.float64)   # (N,)
+        XtX = X.T @ X
+        Xty = X.T @ y
+        try:
+            theta = np.linalg.solve(XtX, Xty)
+        except np.linalg.LinAlgError:
+            theta = np.linalg.lstsq(X, y, rcond=None)[0]
+        self.p, self.q = float(theta[0]), float(theta[1])
+        return True
+
+    def map(self, f):
+        """将特征 f 映射为距离 Z（米），带数值保护。"""
+        if not self.ready():
+            return None
+        denom = self.p * float(f) + self.q
+        if denom < 1e-6:
+            denom = 1e-6
+        return float(1.0 / denom)
+
+    def __repr__(self) -> str:
+        if not self.ready():
+            return "InvDepthCalibrator(unfitted)"
+        return f"InvDepthCalibrator(1/Z = {self.p:.6g} * f + {self.q:.6g} -> Z = 1/(p*f+q))"
 
 # ---------------- UDP ----------------
 UDP_IP = "127.0.0.1"
@@ -181,28 +237,22 @@ hands = mp_hands.Hands(
 
 # ---------------- 摄像头 ----------------
 cap = cv2.VideoCapture(0)
-# 可按需降低分辨率以提速（640x480 足够演示）
+# 降分辨率提速（可按需调整）
 cap.set(cv2.CAP_PROP_FRAME_WIDTH, 640)
 cap.set(cv2.CAP_PROP_FRAME_HEIGHT, 480)
 H = int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
 W = int(cap.get(cv2.CAP_PROP_FRAME_WIDTH))
 
-# ---------------- MiDaS 后台线程启动 ----------------
+# ---------------- MiDaS 后台线程 ----------------
 midas_worker = MidasWorker(expected_size_hw=(H, W))
 midas_worker.start()
 
-# ---------------- 标定（scale） ----------------
-# 交互逻辑：按 'c' 开始采集 CALIB_N 帧 wrist 的 fused 值；自动取中位数，然后提示输入真实距离(米)，算出 scale
-scale = None
-CALIB_N = 12
-calib_collecting = False
-calib_vals = []
+# ---------------- 标定器 & 提示 ----------------
+calib = InvDepthCalibrator()
+print("标定：将掌根(WRIST)停在一个已知距离处，按 'c' 采样并输入真实距离(米)；")
+print("可在不同距离多次按 'c'（建议 ≥3），按 'f' 拟合；'u' 撤销；'x' 清空；'q' 退出。")
 
-print("按 'c' 启动多帧标定，按 'q' 退出。标定将采集多帧 wrist 的 fused 值，然后提示你输入真实距离(米)。")
-
-# ---------------- 平滑设置 ----------------
-# 对每个关键点的 fused 做中值平滑（抑制抖动）
-from collections import deque
+# ---------------- 平滑与融合 ----------------
 K_SMOOTH = 7
 fused_history = {}  # key: (hand_idx, lm_id) -> deque
 
@@ -215,7 +265,6 @@ def smooth_fused(hand_idx, lm_id, val):
     dq.append(val)
     return float(np.median(np.array(dq)))
 
-# ---------------- 小工具 ----------------
 PALM_CENTER_IDS = [0, 5, 9, 13, 17]  # WRIST + MCPs
 
 def sample_depth_at(px, py, depth_map):
@@ -224,52 +273,48 @@ def sample_depth_at(px, py, depth_map):
     h, w = depth_map.shape
     x = int(np.clip(px, 0, w - 1))
     y = int(np.clip(py, 0, h - 1))
-    # 3x3 中值
-    x0 = max(0, x - 1); x1 = min(w - 1, x + 1)
-    y0 = max(0, y - 1); y1 = min(h - 1, y + 1)
+    # 稳健：7x7 中值
+    r = 3
+    x0 = max(0, x - r); x1 = min(w - 1, x + r)
+    y0 = max(0, y - r); y1 = min(h - 1, y + r)
     patch = depth_map[y0:y1 + 1, x0:x1 + 1]
     return float(np.median(patch))
 
-# 融合：优先用 MiDaS（相对值）+ MediaPipe 的 -z，缺哪项就用另一项
-W_MIDAS = 0.6
-W_MPZ   = 0.4
+# 融合权重（更偏重 MiDaS raw）
+W_MIDAS = 0.8
+W_MPZ   = 0.2
 
-def fused_depth(mp_z_norm, midas_rel):
-    if (midas_rel is not None) and (mp_z_norm is not None):
-        return W_MPZ * mp_z_norm + W_MIDAS * midas_rel
-    elif midas_rel is not None:
-        return midas_rel
+def fused_depth(mp_z_norm, midas_raw):
+    if (midas_raw is not None) and (mp_z_norm is not None):
+        return W_MPZ * mp_z_norm + W_MIDAS * midas_raw
+    elif midas_raw is not None:
+        return midas_raw
     else:
         return mp_z_norm if mp_z_norm is not None else 0.0
 
 # ---------------- 主循环 ----------------
 p_time = time.time()
-frame_count = 0
 
 try:
     while True:
         ok, frame_bgr = cap.read()
         if not ok:
             break
-        frame_count += 1
 
-        # 镜像，方便人像交互
+        # 镜像更自然
         frame_bgr = cv2.flip(frame_bgr, 1)
         frame_rgb = cv2.cvtColor(frame_bgr, cv2.COLOR_BGR2RGB)
 
-        # 提交给 MiDaS 后台（异步），主线程不等待
+        # 提交给 MiDaS 后台（异步）
         if USE_MIDAS and midas_worker.enabled:
             midas_worker.submit(frame_rgb)
 
-        # 取最新深度图（可能为 None）
         depth_map = midas_worker.latest_depth() if midas_worker.enabled else None
 
-        # MediaPipe 每帧跑（快）
+        # 处理手部关键点
         res = hands.process(frame_rgb)
-
         data = {"timestamp": time.time(), "hands": []}
 
-        # 处理手部关键点
         if res.multi_hand_landmarks:
             for hi, hand_lmks in enumerate(res.multi_hand_landmarks):
                 lm_list = []
@@ -277,105 +322,116 @@ try:
                 palm_py_sum = 0.0
                 palm_count = 0
 
-                # 遍历 21 个关键点
                 for i, lm in enumerate(hand_lmks.landmark):
                     px = int(lm.x * W)
                     py = int(lm.y * H)
-                    mp_z = -lm.z  # MediaPipe z（朝向相机为正的相对值）
-                    md = sample_depth_at(px, py, depth_map)  # MiDaS 相对深度（0..1）
+                    mp_z = -lm.z  # MediaPipe 的相对深度（接近度取正）
+                    md = sample_depth_at(px, py, depth_map)  # MiDaS raw
                     fused_rel = fused_depth(mp_z, md)
                     fused_s = smooth_fused(hi, i, fused_rel)
 
                     if i in PALM_CENTER_IDS:
-                        palm_px_sum += px; palm_py_sum += py; palm_count += 1
+                        palm_px_sum += px
+                        palm_py_sum += py
+                        palm_count += 1
 
                     lm_list.append({
                         "id": i,
                         "px": px, "py": py,
-                        "fused": fused_s,  # 相对深度（已平滑）
+                        "fused": fused_s,
                     })
 
-                    # 画点（调试）
                     cv2.circle(frame_bgr, (px, py), 2, (0, 255, 0), -1)
 
-                # 计算掌心近似点（WRIST+四个MCP的平均）
+                # 掌心像素位置
                 if palm_count > 0:
                     palm_cx = int(palm_px_sum / palm_count)
                     palm_cy = int(palm_py_sum / palm_count)
                 else:
                     palm_cx, palm_cy = lm_list[0]["px"], lm_list[0]["py"]
 
-                # 采样掌心深度（相对）
+                # 掌心/掌根接近度
                 palm_md = sample_depth_at(palm_cx, palm_cy, depth_map)
-                # 用 WRIST 的 mp_z 作为掌根参考
                 wrist_fused = next((l["fused"] for l in lm_list if l["id"] == 0), lm_list[0]["fused"])
-                # 掌心 fused（与 wrist 融合保持一致，这里直接采样 MiDaS 并与 wrist 的 mp_z 融合也可）
                 palm_fused = palm_md if palm_md is not None else wrist_fused
 
-                # 写入 hand 结构
+                # 手对象：始终包含 fused；z_m 未标定时为 None
                 hand_obj = {
                     "hand_index": hi,
                     "landmarks": lm_list,
                     "palm_center_pxpy": [palm_cx, palm_cy],
+                    "wrist_fused": float(wrist_fused),
+                    "palm_center_fused": float(palm_fused),
+                    "wrist_z_m": None,
+                    "palm_center_z_m": None,
                 }
 
-                # 若已标定：写米制距离
-                if scale is not None:
+                # 若已拟合：映射为米，并写入 landmarks 的 z_m
+                if calib.ready():
                     for l in hand_obj["landmarks"]:
-                        l["z_m"] = l["fused"] * scale
-                    hand_obj["wrist_z_m"] = wrist_fused * scale
-                    hand_obj["palm_center_z_m"] = palm_fused * scale
+                        l["z_m"] = calib.map(l["fused"])
+                    hand_obj["wrist_z_m"] = calib.map(wrist_fused)
+                    hand_obj["palm_center_z_m"] = calib.map(palm_fused)
 
                 data["hands"].append(hand_obj)
 
-                # 在画面上显示 wrist/palm 距离
-                if scale is not None:
-                    cv2.putText(
-                        frame_bgr,
-                        f"H{hi} wrist:{hand_obj['wrist_z_m']:.2f}m palm:{hand_obj['palm_center_z_m']:.2f}m",
-                        (10, 60 + 20 * hi),
-                        cv2.FONT_HERSHEY_SIMPLEX, 0.6, (0, 255, 255), 2
-                    )
-
-                # 画掌心点
+                # HUD：未标定显示 fused，已标定显示米
                 cv2.circle(frame_bgr, (palm_cx, palm_cy), 4, (0, 255, 255), -1)
+                if calib.ready():
+                    text = f"H{hi} wrist:{hand_obj['wrist_z_m']:.2f}m  palm:{hand_obj['palm_center_z_m']:.2f}m"
+                else:
+                    text = f"H{hi} wrist_fused:{wrist_fused:.3f}"
+                cv2.putText(
+                    frame_bgr, text,
+                    (10, 60 + 20 * hi),
+                    cv2.FONT_HERSHEY_SIMPLEX, 0.6, (0, 255, 255), 2
+                )
 
-        # ---- 标定逻辑 ----
+        # ---- 键盘事件：多点标定 ----
         key = cv2.waitKey(1) & 0xFF
         if key == ord('c'):
-            # 开始/重置采样
-            calib_collecting = True
-            calib_vals = []
-            print(f"[Calib] 开始采集 {CALIB_N} 帧 wrist fused 值，请保持掌根在目标位置...")
+            if res.multi_hand_landmarks and len(res.multi_hand_landmarks) > 0 and data["hands"]:
+                wrist_fused = data["hands"][0]["landmarks"][0]["fused"]
+                try:
+                    s_in = input("[Calib] 输入当前掌根(WRIST)到相机的真实距离(米)：").strip()
+                    real_d = float(s_in)
+                    if real_d <= 0:
+                        print("[Calib] 距离必须为正。")
+                    else:
+                        calib.add_sample(wrist_fused, real_d)
+                        print(f"[Calib] 已添加样本 #{len(calib.samples)}: f={wrist_fused:.6f}, Z={real_d:.3f} m")
+                except Exception as e:
+                    print("[Calib] 输入无效：", repr(e))
+            else:
+                print("[Calib] 画面中没有检测到手，无法采样。")
+
+        elif key == ord('f'):
+            ok = calib.fit()
+            if ok:
+                print(f"[Calib] 拟合完成：1/Z = {calib.p:.6g} * f + {calib.q:.6g} -> Z = 1/(p*f+q)")
+                if len(calib.samples) >= 2:
+                    errs = []
+                    for f_val, Z in calib.samples:
+                        Z_hat = calib.map(f_val)
+                        errs.append(abs(Z_hat - Z))
+                    mae = np.mean(errs)
+                    print(f"[Calib] 样本 MAE ≈ {mae:.3f} m  （样本数 {len(calib.samples)}）")
+            else:
+                print("[Calib] 样本不足（至少 2 个）。请在不同距离多采几次 'c' 再按 'f'。")
+
+        elif key == ord('u'):
+            calib.undo()
+            print(f"[Calib] 撤销，剩余样本数：{len(calib.samples)}")
+
+        elif key == ord('x'):
+            calib.reset()
+            print("[Calib] 已重置标定。")
+
         elif key == ord('q'):
             break
 
-        # 收集标定样本
-        if calib_collecting and res.multi_hand_landmarks:
-            # 取第一只手的 wrist
-            lm0 = data["hands"][0]["landmarks"][0] if data["hands"] else None
-            if lm0 is not None:
-                calib_vals.append(lm0["fused"])
-                cv2.putText(frame_bgr, f"[Calib] {len(calib_vals)}/{CALIB_N}", (10, H - 20),
-                            cv2.FONT_HERSHEY_SIMPLEX, 0.7, (0, 180, 255), 2)
-
-            if len(calib_vals) >= CALIB_N:
-                calib_collecting = False
-                fused_med = float(np.median(np.array(calib_vals)))
-                print(f"[Calib] 样本中位数 fused = {fused_med:.6f}")
-                try:
-                    s_in = input("[Calib] 输入掌根(WRIST)到相机的真实距离(米)：").strip()
-                    real_d = float(s_in)
-                    if fused_med <= 1e-9:
-                        print("[Calib] 融合值异常，标定失败。")
-                    else:
-                        scale = real_d / fused_med
-                        print(f"[Calib] 标定完成：scale = {scale:.12f}，验证: fused_med*scale ≈ {fused_med*scale:.4f} m")
-                except Exception as e:
-                    print("[Calib] 输入无效，标定取消：", repr(e))
-
-        # ---- UDP 发送（仅在已标定时发送米制距离）----
-        if scale is not None and data["hands"]:
+        # ---- UDP 发送（已拟合才发 z_m）----
+        if data["hands"]:
             try:
                 sock.sendto(json.dumps(data).encode("utf-8"), (UDP_IP, UDP_PORT))
             except Exception:
@@ -385,9 +441,10 @@ try:
         now = time.time()
         fps = 1.0 / (now - p_time + 1e-9)
         p_time = now
-        cv2.putText(frame_bgr, f"FPS:{int(fps)} scale:{'%.6g'%scale if scale is not None else 'None'}",
+        hud_right = f"p={calib.p:.3g}, q={calib.q:.3g}" if calib.ready() else "未标定"
+        cv2.putText(frame_bgr, f"FPS:{int(fps)}  {hud_right}",
                     (10, 30), cv2.FONT_HERSHEY_SIMPLEX, 0.7, (0, 255, 0), 2)
-        cv2.imshow("Hand Depth Fusion (CPU friendly)", frame_bgr)
+        cv2.imshow("Hand Depth Fusion (inverse-depth calibration, CPU-friendly)", frame_bgr)
 
 finally:
     midas_worker.stop()
