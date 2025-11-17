@@ -70,7 +70,6 @@ hands = mp.solutions.hands.Hands(
 WIN_NAME = "HandDepth"
 cv2.namedWindow(WIN_NAME)
 cv2.createTrackbar("D_cm", WIN_NAME, 50, 200, lambda v: None)  # 1~200 cm
-cv2.createTrackbar("W_cm", WIN_NAME, 8, 30, lambda v: None)    # 1~30 cm（默认 8 cm）
 
 # 状态量（两路标定参数）
 scale = None   # z_vis 的比例尺（m per z_vis）
@@ -141,7 +140,7 @@ while True:
             palm_Zz = float(palm_f * scale)
             wrist_Zz = float(wrist_f * scale)
 
-        W_cm = max(cv2.getTrackbarPos("W_cm", WIN_NAME), 1)
+        W_cm = 8.5  # 默认掌宽
         W_m = W_cm / 100.0
         if f_eff is not None and width_px is not None and width_px > 1:
             palm_Zw = float((f_eff * W_m) / width_px)
@@ -182,8 +181,7 @@ while True:
 
     # HUD：轨迹条显示
     D_cm = max(cv2.getTrackbarPos("D_cm", WIN_NAME), 1)
-    W_cm = max(cv2.getTrackbarPos("W_cm", WIN_NAME), 1)
-    draw_text(frame, f"D_cm={D_cm} | W_cm={W_cm}  ['c'=calib  'r'=reset  'q'=quit]", 10, frame.shape[0] - 36)
+    draw_text(frame, f"D_cm={D_cm} ['c'=calib  'r'=reset  'q'=quit]", 10, frame.shape[0] - 36)
 
     cv2.imshow(WIN_NAME, frame)
 
