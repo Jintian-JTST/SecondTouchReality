@@ -20,19 +20,33 @@ L_CM  = 17            # 名义掌长（厘米，当前实现用于“长通道�
 S_VIS_TH   = 0.10     # s 的可见性阈值：低于该值的通道直接弃用（越大越严格）
 AGREE_FRAC = 0.05     # 两通道相对差异阈值：小于它则加权平均；否则择权重大者
 EMA_ALPHA  = 0.25     # 一阶低通(EMA)系数：大=更跟手、稳得少；小=更稳、滞后多
-WEIGHT_EXP = 3.0      # 权重幂次：权重 = s^WEIGHT_EXP；幂越大，s 小的通道权重掉得越狠
+WEIGHT_EXP = 4.0      # 权重幂次：权重 = s^WEIGHT_EXP；幂越大，s 小的通道权重掉得越狠
 WIDTH_BIAS = 1.3      # 掌宽通道的先验偏置：>1 偏向 Zw（更“刚”），<1 偏向 Zl
 Z_MAX_CM   = 200.0    # 深度硬限幅（厘米），防止异常值炸表
+# —— 卷曲感知权重（握拳降权） ——
+CURL_K = 1.2        # 卷曲惩罚强度；越大，握拳时 Zl 权重掉得越狠
+CURL_BOOST_W = 0.6  # 握拳时对掌宽通道的动态加权系数
+# —— 侧向↔正面门控 + 卷曲权重 ——
+S_W_LO = 0.50   # s_w 低于此值视为“侧向”
+S_W_HI = 0.85   # s_w 高于此值视为“正面”
+CURL_K = 2.2    # 正面时对掌长的卷曲惩罚强度（exp(-K*curl)）
+CURL_BOOST_W = 0.8  # 正面时对掌宽的卷曲增益（1 + BOOST*curl）
+
+
 
 # —— 时域滤波（“中值 → 限速 → EMA” 链） ——
-MED_WIN = 1           # 中值滤波窗口（帧数，奇数更好）；大一点更抗尖峰
-MAX_SLEW_CM_S = 40.0  # 限速器最大跟随速度（厘米/秒）；小更稳但更拖尾，大更跟手
+MED_WIN = 7           # 中值滤波窗口（帧数，奇数更好）；大一点更抗尖峰
+MAX_SLEW_CM_S = 30.0  # 限速器最大跟随速度（厘米/秒）；小更稳但更拖尾，大更跟手
 
 
 
 mp_hands  = mp.solutions.hands
 mp_draw   = mp.solutions.drawing_utils
 mp_styles = mp.solutions.drawing_styles
+
+def smoothstep(x, lo, hi):
+    t = clip((x - lo) / max(1e-6, hi - lo), 0.0, 1.0)
+    return t * t * (3 - 2 * t)  # C1 连续，过渡干净
 
 def draw_text(img, txt, x, y, color=(255,255,255), scale=0.6):
     cv2.putText(img, txt, (x, y), cv2.FONT_HERSHEY_SIMPLEX, scale, (0,0,0), 3, cv2.LINE_AA)
@@ -52,6 +66,7 @@ class Measurements:
     w_px: Optional[float]; l_px: Optional[float]
     s_w: float; s_l: float
     p0: Tuple[int,int]; p5: Tuple[int,int]; p9: Tuple[int,int]; p17: Tuple[int,int]
+    curl: float
 
 @dataclass
 class CalibState:
@@ -100,7 +115,6 @@ def extract_meas(hand_landmarks, img_w, img_h):
     v1 = pts_3d[10] - pts_3d[9]
     v2 = pts_3d[11] - pts_3d[10]
     v3 = pts_3d[12] - pts_3d[11]
-
     segs = [v0, v1, v2, v3]
     sum_xy = 0.0
     sum_3d = 0.0
@@ -109,9 +123,18 @@ def extract_meas(hand_landmarks, img_w, img_h):
         n2 = float(np.linalg.norm(v[:2]))
         sum_xy += n2
         sum_3d += n3
-    s_l = clip(sum_xy / (sum_3d + 1e-6), 0.0, 1.0)
 
-    return Measurements(w_px, l_px, s_w, s_l, tuple(p0), tuple(p5), tuple(p9), tuple(p17))
+    # 卷曲度：中指 9-10-11-12 的 3D 直弦/链长
+    chord3d = float(np.linalg.norm(pts_3d[12] - pts_3d[9]))
+    chain3d = (float(np.linalg.norm(pts_3d[10] - pts_3d[9])) +
+               float(np.linalg.norm(pts_3d[11] - pts_3d[10])) +
+               float(np.linalg.norm(pts_3d[12] - pts_3d[11])) + 1e-6)
+    straightness = clip(chord3d / chain3d, 0.0, 1.0)
+    curl = 1.0 - straightness
+
+    s_l = clip(sum_xy / (sum_3d + 1e-6)-curl*0.2, 0.0, 1.0)
+
+    return Measurements(w_px, l_px, s_w, s_l, tuple(p0), tuple(p5), tuple(p9), tuple(p17), curl)
 
 def start_collect(calib: CalibState):
     calib.collecting = True
@@ -138,18 +161,29 @@ def estimate_fused_Z(meas: Measurements, calib: CalibState):
     if Zl is None: return Zw, Zw, None
     if Zw is None: return Zl, None, Zl
 
-    ww = WIDTH_BIAS * (meas.s_w ** WEIGHT_EXP) if meas.s_w > S_VIS_TH else 0.0
-    wl =               (meas.s_l ** WEIGHT_EXP) if meas.s_l > S_VIS_TH else 0.0
+    # g≈0: 侧向；g≈1: 正面
+    g = smoothstep(meas.s_w, S_W_LO, S_W_HI)
 
+    # 掌宽权重：姿态 s_w^exp * 先验偏置 *（仅在正面时因卷曲而加权）
+    ww = (meas.s_w ** WEIGHT_EXP) if meas.s_w > S_VIS_TH else 0.0
+    ww *= WIDTH_BIAS * (1.0 + CURL_BOOST_W * g * meas.curl)
+
+    # 掌长权重：姿态 s_l^exp *（仅在正面时对卷曲做惩罚；侧向时不惩罚）
+    wl = (meas.s_l ** WEIGHT_EXP) if meas.s_l > S_VIS_TH else 0.0
+    wl *= math.exp(-CURL_K * g * meas.curl)
+
+    # 都被砍：按 s 大小择一
     if ww == 0.0 and wl == 0.0:
         Z = Zw if meas.s_w >= meas.s_l else Zl
         return Z, Zw, Zl
 
+    # 一致性门控：差异不大就做加权平均
     rel = abs(Zw - Zl) / max(1e-6, 0.5 * (Zw + Zl))
     if rel < AGREE_FRAC and (ww > 0 and wl > 0):
         Z = (ww * Zw + wl * Zl) / (ww + wl)
         return Z, Zw, Zl
 
+    # 分歧大：权重大者赢；若接近则偏向掌宽（更“刚”）
     if abs(ww - wl) < 0.1 * (ww + wl + 1e-6):
         Z = Zw
     else:
