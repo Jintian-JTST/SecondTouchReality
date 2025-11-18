@@ -14,10 +14,18 @@ D_CM  = 40
 W_CM  = 9
 L_CM  = 10
 
-S_VIS_TH   = 0.80
+S_VIS_TH   = 0.10
 AGREE_FRAC = 0.05
 EMA_ALPHA  = 0.25
+WEIGHT_EXP = 2      # s 的幂次，陡一点
+WIDTH_BIAS = 0.9    # 给掌宽通道一个先验偏置
 Z_MAX_CM   = 200.0
+
+
+MED_WIN = 5              # 中值滤波窗口（帧数，奇数更好）
+MAX_SLEW_CM_S = 40.0    # 最大跟随速度（cm/s），限制突变
+
+
 
 mp_hands  = mp.solutions.hands
 mp_draw   = mp.solutions.drawing_utils
@@ -56,22 +64,58 @@ class CalibState:
 class RuntimeState:
     Z_ema_cm: Optional[float] = None
     fps: float = 0.0
+    z_hist: deque = field(default_factory=lambda: deque(maxlen=MED_WIN))
+    Z_slew_cm: Optional[float] = None
 
 def extract_meas(hand_landmarks, img_w, img_h):
-    if not hand_landmarks: return None
+    if not hand_landmarks:
+        return None
     lm = hand_landmarks[0].landmark
-    pts_px = np.array([(int(l.x * img_w), int(l.y * img_h)) for l in lm], dtype=np.int32)
-    pts_3d = np.array([(l.x, l.y, l.z) for l in lm], dtype=np.float32)
-    p0, p5, p9, p17 = pts_px[0], pts_px[5], pts_px[9], pts_px[17]
+
+    # 像素坐标 & 归一化3D坐标
+    pts_px  = np.array([(int(l.x * img_w), int(l.y * img_h)) for l in lm], dtype=np.int32)
+    pts_3d  = np.array([(l.x, l.y, l.z) for l in lm], dtype=np.float32)  # z<0 朝相机
+
+    # 需要用到的点
+    p0, p5, p9, p10, p11, p12, p17 = pts_px[0], pts_px[5], pts_px[9], pts_px[10], pts_px[11], pts_px[12], pts_px[17]
+
+    # 掌宽（保持一段 5↔17）
     w_px = l2(p5, p17)
-    l_px = l2(p0, p9)
-    vw = pts_3d[17] - pts_3d[5]
-    vl = pts_3d[9]  - pts_3d[0]
+
+    # 掌长：改为四段折线 0→9→10→11→12 的像素长度之和
+    l_px = (
+        l2(p0,  p9)  +
+        l2(p9,  p10) +
+        l2(p10, p11) +
+        l2(p11, p12)
+    )
+
+    # 投影因子 s
     def s_of(v):
         n3 = float(np.linalg.norm(v)) + 1e-6
         n2 = float(np.linalg.norm(v[:2]))
         return clip(n2 / n3, 0.0, 1.0)
-    s_w, s_l = s_of(vw), s_of(vl)
+
+    # 宽通道：一段
+    vw   = pts_3d[17] - pts_3d[5]
+    s_w  = s_of(vw)
+
+    # 长通道：四段的“有效投影因子” = 加权平均（按3D段长加权）
+    v0 = pts_3d[9]  - pts_3d[0]
+    v1 = pts_3d[10] - pts_3d[9]
+    v2 = pts_3d[11] - pts_3d[10]
+    v3 = pts_3d[12] - pts_3d[11]
+
+    segs = [v0, v1, v2, v3]
+    sum_xy = 0.0
+    sum_3d = 0.0
+    for v in segs:
+        n3 = float(np.linalg.norm(v)) + 1e-6
+        n2 = float(np.linalg.norm(v[:2]))
+        sum_xy += n2
+        sum_3d += n3
+    s_l = clip(sum_xy / (sum_3d + 1e-6), 0.0, 1.0)
+
     return Measurements(w_px, l_px, s_w, s_l, tuple(p0), tuple(p5), tuple(p9), tuple(p17))
 
 def start_collect(calib: CalibState):
@@ -92,20 +136,37 @@ def z_from_channel(f_pix, L_nom_cm, s, ell_px):
     return clip((f_pix * L_nom_cm * s) / float(ell_px), 0.0, Z_MAX_CM)
 
 def estimate_fused_Z(meas: Measurements, calib: CalibState):
+    # 单路深度
     Zw = z_from_channel(calib.f_w, W_CM, meas.s_w, meas.w_px) if calib.f_w else None
     Zl = z_from_channel(calib.f_l, L_CM, meas.s_l, meas.l_px) if calib.f_l else None
-    Z = None
-    if Zw is not None and Zl is not None:
-        ww = (meas.s_w ** 1) if meas.s_w > S_VIS_TH else 0.0
-        wl = (meas.s_l ** 1) if meas.s_l > S_VIS_TH else 0.0
-        if ww == 0.0 and wl == 0.0: Z = Zw if meas.s_w >= meas.s_l else Zl
-        else:
-            rel = abs(Zw - Zl) / max(1e-6, 0.5*(Zw+Zl))
-            if rel < AGREE_FRAC and (ww > 0 and wl > 0): Z = (ww*Zw + wl*Zl)/(ww+wl)
-            else: Z = Zw if ww >= wl else Zl
-    elif Zw is not None: Z = Zw
-    elif Zl is not None: Z = Zl
+
+    # 只有一路可用
+    if Zw is None and Zl is None: return None, None, None
+    if Zl is None: return Zw, Zw, None
+    if Zw is None: return Zl, None, Zl
+
+    # 权重：给宽通道偏置 + s^WEIGHT_EXP；低于阈值直接置 0
+    ww = WIDTH_BIAS * (meas.s_w ** WEIGHT_EXP) if meas.s_w > S_VIS_TH else 0.0
+    wl =               (meas.s_l ** WEIGHT_EXP) if meas.s_l > S_VIS_TH else 0.0
+
+    # 两路都被砍：按 s 大小二选一
+    if ww == 0.0 and wl == 0.0:
+        Z = Zw if meas.s_w >= meas.s_l else Zl
+        return Z, Zw, Zl
+
+    # 一致性门控：差异不大就加权平均
+    rel = abs(Zw - Zl) / max(1e-6, 0.5 * (Zw + Zl))
+    if rel < AGREE_FRAC and (ww > 0 and wl > 0):
+        Z = (ww * Zw + wl * Zl) / (ww + wl)
+        return Z, Zw, Zl
+
+    # 分歧较大：权重大的赢；若两权重很接近，平局规则=优先 Zw（更刚体，握拳更稳）
+    if abs(ww - wl) < 0.1 * (ww + wl + 1e-6):
+        Z = Zw
+    else:
+        Z = Zw if ww >= wl else Zl
     return Z, Zw, Zl
+
 
 def main():
     cv2.namedWindow(WIN, cv2.WINDOW_NORMAL); cv2.resizeWindow(WIN, 1280, 720)
@@ -119,9 +180,16 @@ def main():
             ok, frame = cap.read()
             if not ok: break
             h, w = frame.shape[:2]
+
+            # —— 先算 dt（每帧必算）——
+            now = time.time()
+            dt = max(1e-3, now - last_t)
+            last_t = now
+            # FPS 也用这个 dt
+            state.fps = (0.9*state.fps + 0.1*(1.0/dt)) if state.fps>0 else (1.0/dt)
+
             rgb = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
             res = hands.process(rgb)
-
             meas = extract_meas(res.multi_hand_landmarks, w, h) if res.multi_hand_landmarks else None
 
             if DRAW_LANDMARKS and res.multi_hand_landmarks:
@@ -142,11 +210,23 @@ def main():
 
             Z=Zw=Zl=None
             if meas is not None and (calib.f_w or calib.f_l):
-                Z,Zw,Zl = estimate_fused_Z(meas, calib)
+                Z, Zw, Zl = estimate_fused_Z(meas, calib)
                 if Z is not None:
-                    state.Z_ema_cm = Z if state.Z_ema_cm is None else (EMA_ALPHA*Z + (1-EMA_ALPHA)*state.Z_ema_cm)
+                    # 1) 中值预滤波
+                    state.z_hist.append(Z)
+                    Z_med = float(np.median(state.z_hist))
 
-            now = time.time(); dt = now - last_t; last_t = now
+                    # 2) 限速器（按 dt 限制最大变化）
+                    prev = state.Z_slew_cm if state.Z_slew_cm is not None else Z_med
+                    max_step = MAX_SLEW_CM_S * dt
+                    step = clip(Z_med - prev, -max_step, max_step)
+                    Z_slew = prev + step
+                    state.Z_slew_cm = Z_slew
+
+                    # 3) EMA
+                    state.Z_ema_cm = Z_slew if state.Z_ema_cm is None else (EMA_ALPHA*Z_slew + (1-EMA_ALPHA)*state.Z_ema_cm)
+
+
             if dt>0: state.fps = 0.9*state.fps + 0.1*(1.0/dt) if state.fps>0 else (1.0/dt)
 
             y=24
