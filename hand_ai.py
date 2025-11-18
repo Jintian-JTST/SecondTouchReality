@@ -5,25 +5,28 @@ from dataclasses import dataclass, field
 from typing import Optional, Tuple
 import numpy as np, mediapipe as mp
 
-WIN = "Hand Depth (Unified Minimal)"
-MAX_NUM_HANDS = 1
-DRAW_LANDMARKS = True
+# —— 基础窗口/开关 ——
+WIN = "Hand Depth (Unified Minimal)"  # 窗口标题
+MAX_NUM_HANDS = 1                     # 同时跟踪的手数（>1 会更慢）
+DRAW_LANDMARKS = False                # 是否在画面上绘制 21 点骨架
 
-CALIB_SAMPLES = 60
-D_CM  = 40
-W_CM  = 9
-L_CM  = 10
+# —— 标定（按 c 时会连续采样） ——
+CALIB_SAMPLES = 30    # 标定采样帧数；更大更稳（噪声更小），但标定更慢
+D_CM  = 40            # 标定时手到相机的真实距离（厘米）
+W_CM  = 8.5             # 名义掌宽（厘米，对应 5↔17）
+L_CM  = 17            # 名义掌长（厘米，当前实现用于“长通道”）
 
-S_VIS_TH   = 0.10
-AGREE_FRAC = 0.05
-EMA_ALPHA  = 0.25
-WEIGHT_EXP = 2      # s 的幂次，陡一点
-WIDTH_BIAS = 0.9    # 给掌宽通道一个先验偏置
-Z_MAX_CM   = 200.0
+# —— 通道融合/质量权重 ——
+S_VIS_TH   = 0.10     # s 的可见性阈值：低于该值的通道直接弃用（越大越严格）
+AGREE_FRAC = 0.05     # 两通道相对差异阈值：小于它则加权平均；否则择权重大者
+EMA_ALPHA  = 0.25     # 一阶低通(EMA)系数：大=更跟手、稳得少；小=更稳、滞后多
+WEIGHT_EXP = 3.0      # 权重幂次：权重 = s^WEIGHT_EXP；幂越大，s 小的通道权重掉得越狠
+WIDTH_BIAS = 1.3      # 掌宽通道的先验偏置：>1 偏向 Zw（更“刚”），<1 偏向 Zl
+Z_MAX_CM   = 200.0    # 深度硬限幅（厘米），防止异常值炸表
 
-
-MED_WIN = 5              # 中值滤波窗口（帧数，奇数更好）
-MAX_SLEW_CM_S = 40.0    # 最大跟随速度（cm/s），限制突变
+# —— 时域滤波（“中值 → 限速 → EMA” 链） ——
+MED_WIN = 1           # 中值滤波窗口（帧数，奇数更好）；大一点更抗尖峰
+MAX_SLEW_CM_S = 40.0  # 限速器最大跟随速度（厘米/秒）；小更稳但更拖尾，大更跟手
 
 
 
@@ -72,17 +75,12 @@ def extract_meas(hand_landmarks, img_w, img_h):
         return None
     lm = hand_landmarks[0].landmark
 
-    # 像素坐标 & 归一化3D坐标
     pts_px  = np.array([(int(l.x * img_w), int(l.y * img_h)) for l in lm], dtype=np.int32)
     pts_3d  = np.array([(l.x, l.y, l.z) for l in lm], dtype=np.float32)  # z<0 朝相机
 
-    # 需要用到的点
     p0, p5, p9, p10, p11, p12, p17 = pts_px[0], pts_px[5], pts_px[9], pts_px[10], pts_px[11], pts_px[12], pts_px[17]
 
-    # 掌宽（保持一段 5↔17）
     w_px = l2(p5, p17)
-
-    # 掌长：改为四段折线 0→9→10→11→12 的像素长度之和
     l_px = (
         l2(p0,  p9)  +
         l2(p9,  p10) +
@@ -90,17 +88,14 @@ def extract_meas(hand_landmarks, img_w, img_h):
         l2(p11, p12)
     )
 
-    # 投影因子 s
     def s_of(v):
         n3 = float(np.linalg.norm(v)) + 1e-6
         n2 = float(np.linalg.norm(v[:2]))
         return clip(n2 / n3, 0.0, 1.0)
 
-    # 宽通道：一段
     vw   = pts_3d[17] - pts_3d[5]
     s_w  = s_of(vw)
 
-    # 长通道：四段的“有效投影因子” = 加权平均（按3D段长加权）
     v0 = pts_3d[9]  - pts_3d[0]
     v1 = pts_3d[10] - pts_3d[9]
     v2 = pts_3d[11] - pts_3d[10]
@@ -136,31 +131,25 @@ def z_from_channel(f_pix, L_nom_cm, s, ell_px):
     return clip((f_pix * L_nom_cm * s) / float(ell_px), 0.0, Z_MAX_CM)
 
 def estimate_fused_Z(meas: Measurements, calib: CalibState):
-    # 单路深度
     Zw = z_from_channel(calib.f_w, W_CM, meas.s_w, meas.w_px) if calib.f_w else None
     Zl = z_from_channel(calib.f_l, L_CM, meas.s_l, meas.l_px) if calib.f_l else None
 
-    # 只有一路可用
     if Zw is None and Zl is None: return None, None, None
     if Zl is None: return Zw, Zw, None
     if Zw is None: return Zl, None, Zl
 
-    # 权重：给宽通道偏置 + s^WEIGHT_EXP；低于阈值直接置 0
     ww = WIDTH_BIAS * (meas.s_w ** WEIGHT_EXP) if meas.s_w > S_VIS_TH else 0.0
     wl =               (meas.s_l ** WEIGHT_EXP) if meas.s_l > S_VIS_TH else 0.0
 
-    # 两路都被砍：按 s 大小二选一
     if ww == 0.0 and wl == 0.0:
         Z = Zw if meas.s_w >= meas.s_l else Zl
         return Z, Zw, Zl
 
-    # 一致性门控：差异不大就加权平均
     rel = abs(Zw - Zl) / max(1e-6, 0.5 * (Zw + Zl))
     if rel < AGREE_FRAC and (ww > 0 and wl > 0):
         Z = (ww * Zw + wl * Zl) / (ww + wl)
         return Z, Zw, Zl
 
-    # 分歧较大：权重大的赢；若两权重很接近，平局规则=优先 Zw（更刚体，握拳更稳）
     if abs(ww - wl) < 0.1 * (ww + wl + 1e-6):
         Z = Zw
     else:
@@ -181,11 +170,9 @@ def main():
             if not ok: break
             h, w = frame.shape[:2]
 
-            # —— 先算 dt（每帧必算）——
             now = time.time()
             dt = max(1e-3, now - last_t)
             last_t = now
-            # FPS 也用这个 dt
             state.fps = (0.9*state.fps + 0.1*(1.0/dt)) if state.fps>0 else (1.0/dt)
 
             rgb = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
@@ -212,18 +199,15 @@ def main():
             if meas is not None and (calib.f_w or calib.f_l):
                 Z, Zw, Zl = estimate_fused_Z(meas, calib)
                 if Z is not None:
-                    # 1) 中值预滤波
                     state.z_hist.append(Z)
                     Z_med = float(np.median(state.z_hist))
 
-                    # 2) 限速器（按 dt 限制最大变化）
                     prev = state.Z_slew_cm if state.Z_slew_cm is not None else Z_med
                     max_step = MAX_SLEW_CM_S * dt
                     step = clip(Z_med - prev, -max_step, max_step)
                     Z_slew = prev + step
                     state.Z_slew_cm = Z_slew
 
-                    # 3) EMA
                     state.Z_ema_cm = Z_slew if state.Z_ema_cm is None else (EMA_ALPHA*Z_slew + (1-EMA_ALPHA)*state.Z_ema_cm)
 
 
