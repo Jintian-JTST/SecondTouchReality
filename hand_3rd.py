@@ -20,7 +20,7 @@
 
 from collections import deque
 import time
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 import cv2
 import numpy as np
 import mediapipe as mp
@@ -33,6 +33,11 @@ MAX_NUM_HANDS = 1
 EMA_ALPHA_Z = 0.25          # 最终 Z 的 EMA 平滑系数
 CALIB_WINDOW = 15           # 标定窗口帧数（中位数）
 S_MIN = 0.15                # 可见性下限（避免 s≈0 爆噪）
+PX_MIN = 10                 # 像素长度下限（px）
+TAU_ERR = 0.15              # 互相重投影的相对误差阈值（<=15% 视为相容）
+GOOD_S = 0.60               # 认为“姿态良好”的 s 参考值（用于置信度映射）
+HYST_FRAMES = 4             # 模式切换的最少连续帧数（迟滞）
+MAX_JUMP = 0.30             # 单帧最大允许相对跳变（30%）
 
 # 关键点编号（MediaPipe Hands）
 ID_WRIST = 0
@@ -80,14 +85,21 @@ class Measurements:
 class CalibState:
     f: float | None = None
     # 采样缓冲（中位数更稳）
-    w_buf: deque = deque(maxlen=CALIB_WINDOW)
-    l_buf: deque = deque(maxlen=CALIB_WINDOW)
-    sw_buf: deque = deque(maxlen=CALIB_WINDOW)
-    sl_buf: deque = deque(maxlen=CALIB_WINDOW)
+    w_buf: deque = field(default_factory=lambda: deque(maxlen=CALIB_WINDOW))
+    l_buf: deque = field(default_factory=lambda: deque(maxlen=CALIB_WINDOW))
+    sw_buf: deque = field(default_factory=lambda: deque(maxlen=CALIB_WINDOW))
+    sl_buf: deque = field(default_factory=lambda: deque(maxlen=CALIB_WINDOW))
 
     def clear(self):
         self.f = None
         self.w_buf.clear(); self.l_buf.clear(); self.sw_buf.clear(); self.sl_buf.clear()
+
+# 运行时状态（用于迟滞与限幅）
+@dataclass
+class RuntimeState:
+    mode: str | None = None   # 'W' | 'L' | 'F'（F=融合）
+    streak: int = 0           # 候选模式连续帧计数（用于迟滞）
+    Z_prev: float | None = None
 
 # ===================== 模块 3｜从 21 点提取两条线 + 可见性 =====================
 
@@ -148,27 +160,104 @@ def calibrate_f(calib: CalibState, D_m: float, W_m: float, L_m: float) -> float 
     calib.f = float(f)
     return calib.f
 
-# ===================== 模块 5｜估距：两通道 + 融合 =====================
+# ===================== 模块 5｜估距：两通道 + 自判定/互斥 + 迟滞 =====================
 
-def estimate_Z(meas: Measurements, f: float, W_m: float, L_m: float) -> tuple[float | None, float | None, float | None]:
-    """返回 (Z_w, Z_l, Z_fused) —— 任一不可用则为 None"""
-    Zw = Zl = Z = None
-    if f is None:
-        return None, None, None
+def estimate_Z_robust(meas: Measurements, f: float, W_m: float, L_m: float, state: RuntimeState):
+    """
+    返回：Zw, Zl, Z_out, conf_w, conf_l, mode
+    逻辑：
+      1) 有效性门限（s 与 像素长度）
+      2) 各自出候选距离 Zw/Zl
+      3) 互相重投影一致性检查（相对误差 <= TAU_ERR）
+      4) 置信度：c = g(s) * h(px) * I(一致)
+      5) 决策：单通道/明显更优/温和融合
+      6) 迟滞：连续 HYST_FRAMES 帧更优才切换主导模式
+      7) 限幅：单帧最大相对变化 MAX_JUMP
+    """
+    def clamp01(x):
+        return float(min(max(x, 0.0), 1.0))
 
-    if meas.w_px and meas.w_px > 1.0:
+    if f is None or meas is None:
+        return None, None, None, 0.0, 0.0, state.mode
+
+    # 1) 有效性
+    valid_w = (meas.s_w >= S_MIN) and (meas.w_px is not None) and (meas.w_px >= PX_MIN)
+    valid_l = (meas.s_l >= S_MIN) and (meas.l_px is not None) and (meas.l_px >= PX_MIN)
+
+    Zw = Zl = None
+    if valid_w:
         Zw = float((f * W_m * meas.s_w) / meas.w_px)
-    if meas.l_px and meas.l_px > 1.0:
+    if valid_l:
         Zl = float((f * L_m * meas.s_l) / meas.l_px)
 
-    ww = (meas.s_w ** 2) if Zw is not None else 0.0
-    wl = (meas.s_l ** 2) if Zl is not None else 0.0
-    denom = ww + wl
-    if denom > 0:
-        Z = (ww * (Zw or 0.0) + wl * (Zl or 0.0)) / denom
+    # 2) 互相重投影一致性
+    c_w = 0.0; c_l = 0.0
+    if valid_w and Zw is not None and meas.l_px is not None and meas.l_px > 1:
+        lhat = (f * L_m * meas.s_l) / Zw
+        e = abs(meas.l_px - lhat) / (meas.l_px + 1e-6)
+        ok = (e <= TAU_ERR)
+        g = clamp01((meas.s_w - S_MIN) / (GOOD_S - S_MIN))
+        h = clamp01((meas.w_px - PX_MIN) / (60 - PX_MIN))
+        c_w = (1.0 if ok else 0.0) * g * h
+
+    if valid_l and Zl is not None and meas.w_px is not None and meas.w_px > 1:
+        what = (f * W_m * meas.s_w) / Zl
+        e = abs(meas.w_px - what) / (meas.w_px + 1e-6)
+        ok = (e <= TAU_ERR)
+        g = clamp01((meas.s_l - S_MIN) / (GOOD_S - S_MIN))
+        h = clamp01((meas.l_px - PX_MIN) / (60 - PX_MIN))
+        c_l = (1.0 if ok else 0.0) * g * h
+
+    # 3) 模式建议
+    suggested = None
+    if (c_w > 0) and (c_l == 0):
+        suggested = 'W'
+    elif (c_l > 0) and (c_w == 0):
+        suggested = 'L'
+    elif (c_w == 0) and (c_l == 0):
+        suggested = None
     else:
-        Z = Zw if Zw is not None else Zl
-    return Zw, Zl, Z
+        if c_w >= 1.5 * c_l:
+            suggested = 'W'
+        elif c_l >= 1.5 * c_w:
+            suggested = 'L'
+        else:
+            suggested = 'F'
+
+    # 4) 迟滞：只有当候选模式连续 HYST_FRAMES 帧更优才切换
+    if suggested is not None:
+        if state.mode is None:
+            state.mode = suggested
+            state.streak = 0
+        elif suggested != state.mode:
+            state.streak += 1
+            if state.streak >= HYST_FRAMES:
+                state.mode = suggested
+                state.streak = 0
+        else:
+            state.streak = 0
+
+    # 5) 选最终 Z
+    Z_out = None
+    if state.mode == 'W' and Zw is not None:
+        Z_out = Zw
+    elif state.mode == 'L' and Zl is not None:
+        Z_out = Zl
+    elif state.mode == 'F' and (c_w + c_l) > 0:
+        Z_out = (c_w * (Zw or 0.0) + c_l * (Zl or 0.0)) / (c_w + c_l)
+    else:
+        # 双失效或无建议，尝试退化：谁有用用谁
+        Z_out = Zw if Zw is not None else Zl
+
+    # 6) 限幅防抖
+    if (Z_out is not None) and (state.Z_prev is not None):
+        low = state.Z_prev * (1.0 - MAX_JUMP)
+        high = state.Z_prev * (1.0 + MAX_JUMP)
+        Z_out = float(max(min(Z_out, high), low))
+    if Z_out is not None:
+        state.Z_prev = Z_out
+
+    return Zw, Zl, Z_out, c_w, c_l, state.mode
 
 # ===================== 模块 6｜主循环 =====================
 
@@ -194,6 +283,7 @@ def main():
     cv2.createTrackbar("L_cm", WIN, 18, 35, lambda v: None)   # 真实掌长（厘米）
 
     calib = CalibState()
+    state = RuntimeState()
     Z_ema = None
 
     fps_last_t = time.time(); fps = 0.0
@@ -220,9 +310,9 @@ def main():
         # 估距（若已标定）
         W_m = max(cv2.getTrackbarPos("W_cm", WIN), 1) / 100.0
         L_m = max(cv2.getTrackbarPos("L_cm", WIN), 1) / 100.0
-        Zw = Zl = Z = None
+        Zw = Zl = Z = None; c_w = c_l = 0.0; mode = state.mode
         if meas is not None and calib.f is not None:
-            Zw, Zl, Z = estimate_Z(meas, calib.f, W_m, L_m)
+            Zw, Zl, Z, c_w, c_l, mode = estimate_Z_robust(meas, calib.f, W_m, L_m, state)
             if Z is not None:
                 Z_ema = ema(Z_ema, Z, EMA_ALPHA_Z)
 
@@ -237,14 +327,14 @@ def main():
             draw_text(frame, f"w_px={meas.w_px:.1f}  s_w={meas.s_w:.2f}", 10, y0)
             draw_text(frame, f"l_px={meas.l_px:.1f}  s_l={meas.s_l:.2f}", 10, y0+22)
 
-        # 显示 Z
+        # 显示 Z 与模式
         y1 = 26 + 22*2 + 6
         if calib.f is None:
             draw_text(frame, "Z=未标定，按 'c' 在 D_cm 处标定", 10, y1, color=(200,230,255))
         else:
             draw_text(frame, f"Zw={Zw:.3f} m" if Zw is not None else "Zw=--", 10, y1)
             draw_text(frame, f"Zl={Zl:.3f} m" if Zl is not None else "Zl=--", 10, y1+22)
-            draw_text(frame, f"Zfused={Z:.3f} m" if Z is not None else "Zfused=--", 10, y1+44, color=(255,255,200))
+            draw_text(frame, f"Z={Z:.3f} m  mode={mode or '-'}  cw={c_w:.2f} cl={c_l:.2f}" if Z is not None else "Z=--", 10, y1+44, color=(255,255,200))
             draw_text(frame, f"Z(EMA)={Z_ema:.3f} m" if Z_ema is not None else "Z(EMA)=--", 10, y1+66, color=(255,255,200))
 
         # FPS & HUD
@@ -262,10 +352,10 @@ def main():
         if k == ord('q'):
             break
         elif k == ord('r'):
-            calib.clear(); Z_ema = None
+            calib.clear(); state = RuntimeState(); Z_ema = None
         elif k == ord('c'):
             D_m = max(D_cm, 1) / 100.0
-            f_new = calibrate_f(calib, D_m, W_m, L_m)
+            _ = calibrate_f(calib, D_m, W_m, L_m)
             # 标定后清空缓冲，防止旧样本污染下一次
             calib.w_buf.clear(); calib.l_buf.clear(); calib.sw_buf.clear(); calib.sl_buf.clear()
 
@@ -274,4 +364,6 @@ def main():
 
 
 if __name__ == "__main__":
+    main()
+
     main()
