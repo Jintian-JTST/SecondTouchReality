@@ -4,7 +4,7 @@
 - 使用 MediaPipe 检测手部关键点；
 - 计算掌宽、掌长、卷曲度 curl、侧度 side；
 - 通过一次标定获得掌宽/掌长两条通道的距离 Zw / Zl；
-- 按照 curl + side 的逻辑融合成最终 Z_final。
+- 按照 curl + side + 掌心/手背 的逻辑融合成最终 Z_final。
 
 按键：
   q  退出
@@ -53,6 +53,38 @@ def l2(p1, p2):
 def lm2px(lm, w, h):
     """把单个 landmark 从归一化坐标转为像素坐标 (x, y)"""
     return np.array([lm.x * w, lm.y * h], dtype=np.float32)
+
+
+def compute_face_sign(landmarks):
+    """
+    判断手掌是掌心朝相机还是手背朝相机。
+    返回一个 face_sign ∈ [-1, +1]：
+        正负只代表方向，具体哪边是掌心靠标定/经验定死。
+    landmarks: result.multi_hand_landmarks[0].landmark
+    """
+    # 取 wrist(0), index_mcp(5), pinky_mcp(17) 三个 3D 点
+    p0 = np.array([landmarks[0].x,  landmarks[0].y,  landmarks[0].z],  dtype=np.float32)
+    p5 = np.array([landmarks[5].x,  landmarks[5].y,  landmarks[5].z],  dtype=np.float32)
+    p17 = np.array([landmarks[17].x, landmarks[17].y, landmarks[17].z], dtype=np.float32)
+
+    u = p5 - p0
+    v = p17 - p0
+    n = np.cross(u, v)  # 手掌底那条“扇形”的法向量
+
+    # 相机朝向大概是 (0,0,-1)，只要用它的方向就行
+    camera_dir = np.array([0.0, 0.0, -1.0], dtype=np.float32)
+
+    s = float(np.dot(n, camera_dir))
+
+    # 归一化一下，保证在 [-1,1]（只看符号其实也够了）
+    denom = (np.linalg.norm(n) * np.linalg.norm(camera_dir) + 1e-6)
+    cos_theta = s / denom
+    cos_theta = max(-1.0, min(1.0, cos_theta))
+
+    # 这里直接用 cos_theta 当 face_sign：
+    #   face_sign ≈ +1   => 法向量几乎正对相机
+    #   face_sign ≈ -1   => 法向量几乎背对相机
+    return cos_theta
 
 
 def compute_palm_width_and_length(landmarks, img_w, img_h):
@@ -108,6 +140,9 @@ def compute_curl(landmarks, img_w, img_h):
 
 
 def compute_side(palm_width_px, palm_length_px, calib: CalibState, gain=1.5):
+    """
+    用“掌宽/掌长”的比例计算侧度，跟远近解耦。
+    """
     if (calib.w_ref_open is None or calib.l_ref_open is None or
         calib.w_ref_open < 1e-3 or calib.l_ref_open < 1e-3 or
         palm_length_px < 1e-3):
@@ -128,18 +163,19 @@ def compute_side(palm_width_px, palm_length_px, calib: CalibState, gain=1.5):
     return clamp(side, 0.0, 1.0)
 
 
-def fuse_depth(Zw, Zl, curl, side,
+def fuse_depth(Zw, Zl, curl, side, palm_front,
                beta=1.0,      # 卷曲对掌宽的加权强度
-               k_curl=0.15,    # 正对+完全握拳时最多减 30%
-               side_gain=1.8,  # 把 side 放大一点，让侧向更“敏感”
-               alpha_side=1.5  # side 对掌长权重的强化系数
+               k_curl=0.15,   # 正对+掌心+完全握拳时最多减 15%
+               side_gain=1.8, # 把 side 放大一点，让侧向更“敏感”
+               alpha_side=1.5 # side 对掌长权重的强化系数
                ):
     """
-    Zw, Zl : 掌宽 / 掌长通道给出的距离
-    curl   : 卷曲度 0~1
-    side   : 侧度   0~1
+    Zw, Zl     : 掌宽 / 掌长通道给出的距离
+    curl       : 卷曲度 0~1
+    side       : 侧度   0~1
+    palm_front : 掌心程度 0~1（0=手背, 1=掌心）
 
-    side_gain    : 在融合阶段把 side 放大，比如 1.8 表示 side=0.5 -> 0.9
+    side_gain    : 在融合阶段把 side 放大
     alpha_side   : g_side 这部分对掌长权重的影响再乘一个放大系数
     """
 
@@ -153,6 +189,7 @@ def fuse_depth(Zw, Zl, curl, side,
 
     curl = clamp(float(curl), 0.0, 1.0)
     side = clamp(float(side), 0.0, 1.0)
+    palm_front = clamp(float(palm_front), 0.0, 1.0)
 
     # 先把 side 放大一下，让它更“暴躁”
     side_eff = clamp(side * side_gain, 0.0, 1.0)
@@ -173,11 +210,12 @@ def fuse_depth(Zw, Zl, curl, side,
     # 先几何融合
     Z_mix = w_w * Zw + w_l * Zl
 
-    # 正对 + 卷曲减距偏差（这里用的是放大后的 g_front）
-    corr = 1.0 - k_curl * g_front * curl
+    # 正对 + 掌心 + 卷曲减距偏差
+    corr = 1.0 - k_curl * g_front * curl * palm_front
     Z_final = Z_mix * corr
 
     return Z_final, w_w, w_l
+
 
 def draw_hud(img, fps, palm_width, palm_length,
              curl, side, Zw, Zl, Z_final, w_w, w_l, calib: CalibState):
@@ -254,6 +292,7 @@ def main():
 
             if result.multi_hand_landmarks:
                 hand_lms = result.multi_hand_landmarks[0]
+                lms = hand_lms.landmark
 
                 # 画 landmarks
                 mp_drawing.draw_landmarks(
@@ -266,11 +305,15 @@ def main():
 
                 # 几何量
                 palm_width, palm_length = compute_palm_width_and_length(
-                    hand_lms.landmark, w, h
+                    lms, w, h
                 )
-                curl = compute_curl(hand_lms.landmark, w, h)
-                side = side = compute_side(palm_width, palm_length, calib)
+                curl = compute_curl(lms, w, h)
+                side = compute_side(palm_width, palm_length, calib)
 
+                # 掌心 / 手背
+                face_sign = compute_face_sign(lms)           # [-1,1]
+                palm_front = 0.5 * (face_sign + 1.0)        # 映射到 [0,1]
+                palm_front = clamp(palm_front, 0.0, 1.0)
 
                 # 用标定结果从 px 算距离
                 if calib.k_w is not None and palm_width > 1e-3:
@@ -278,7 +321,7 @@ def main():
                 if calib.k_l is not None and palm_length > 1e-3:
                     Zl = calib.k_l / palm_length
 
-                Z_final, w_w, w_l = fuse_depth(Zw, Zl, curl, side)
+                Z_final, w_w, w_l = fuse_depth(Zw, Zl, curl, side, palm_front)
 
                 # 如果正在标定，就记录当前帧的数据
                 if calib.sampling:
