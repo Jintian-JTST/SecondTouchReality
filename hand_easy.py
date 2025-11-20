@@ -193,39 +193,54 @@ def fuse_depth(Zw, Zl, curl, side, palm_front,
     return Z_final, w_w, w_l
 
 
+def compute_palm_center_px(landmarks, img_w, img_h):
+    idxs = [0, 5, 17]  # wrist, index_mcp, pinky_mcp
+    pts = [lm2px(landmarks[i], img_w, img_h) for i in idxs]
+    c = np.mean(pts, axis=0)
+    return int(c[0]), int(c[1])
+
+
 def draw_hud(img, 
              curl, side, Zw, Zl, Z_final_raw, Z_disp,
-             w_w, w_l, calib: CalibState, palm_front):
+             w_w, w_l, calib: CalibState, palm_front,
+             anchor=None):
     h, w, _ = img.shape
-    y = 30
+
+    # 文本起始位置：如果给了锚点，就贴在手附近；否则左上角
+    if anchor is None:
+        x0, y0 = 10, 30
+    else:
+        ax, ay = anchor
+        x0 = int(ax + 10)                # 稍微往右一点
+        y0 = int(max(20, ay - 40))       # 放在手的上方一点，别挡住手
+
+    y = y0
     dy = 22
+
     def put(line):
         nonlocal y
-        cv2.putText(img, line, (10, y),
-                    cv2.FONT_HERSHEY_SIMPLEX, 0.6, (0, 255, 0), 1, cv2.LINE_AA)
+        cv2.putText(
+            img,
+            line,
+            (x0, y),
+            cv2.FONT_HERSHEY_SIMPLEX,
+            0.6,
+            (255, 255, 255),   # 白色
+            2,           # 稍微粗一点，容易看
+            cv2.LINE_AA
+        )
         y += dy
 
-    # put(f"FPS: {fps:5.1f}")
-    # put(f"palm_width : {palm_width:7.1f} px")
-    # put(f"palm_length: {palm_length:7.1f} px")
-    #put(f"curl (0-1)      : {curl:4.2f}")
-    #put(f"side (0-1)      : {side:4.2f}")
-    #put(f"palm_front(0-1) : {palm_front:4.2f}")
-    #put(f"Zw, Zl          : {Zw if Zw is not None else -1:6.2f}, "f"{Zl if Zl is not None else -1:6.2f}")
-    #put(f"Z_final raw     : {Z_final_raw if Z_final_raw is not None else -1:6.2f}")
-    put(f"Z_disp (filtered): {Z_disp if Z_disp is not None else -1:6.2f}")
-    #put(f"weights w_w,w_l : {w_w:4.2f}, {w_l:4.2f}")
+    # 你只想显示 Z_disp 的话，就保留这一行
+    put(f"Z_disp: {Z_disp if Z_disp is not None else -1:6.2f}")
 
     if calib.k_w is None or calib.k_l is None:
-        put("Calib: NOT SET  (press 'c' to calibrate)")
+        put("Calib: NOT SET  (c = calibrate)")
     else:
-        put("Calib: OK  (press 'r' to reset, 'c' to recalibrate)")
+        put("Calib: OK (r = reset, c = recal)")
 
     if calib.sampling:
-        put(f"Sampling for calib... {len(calib.samples_w)} frames")
-
-    cv2.putText(img, "Keys: q=quit, c=calib, r=reset",
-                (10, h - 10), cv2.FONT_HERSHEY_SIMPLEX, 0.6, (0, 255, 255), 1, cv2.LINE_AA)
+        put(f"Sampling... {len(calib.samples_w)} frames")
 
 
 def main():
@@ -275,6 +290,7 @@ def main():
             if result.multi_hand_landmarks:
                 hand_lms = result.multi_hand_landmarks[0]
                 lms = hand_lms.landmark
+                palm_cx, palm_cy = compute_palm_center_px(lms, w, h)
 
                 mp_drawing.draw_landmarks(frame,hand_lms,mp_hands.HAND_CONNECTIONS,mp_styles.get_default_hand_landmarks_style(),mp_styles.get_default_hand_connections_style())
 
@@ -333,7 +349,9 @@ def main():
             #fps = 1.0 / (now - last_t) if now > last_t else 0.0
             #last_t = now
 
-            draw_hud(frame,curl, side, Zw, Zl, Z_final_raw, Z_disp,w_w, w_l, calib, palm_front)
+            draw_hud(frame, curl, side, Zw, Zl, Z_final_raw, Z_disp,
+                    w_w, w_l, calib, palm_front,
+                    anchor=(palm_cx, palm_cy))
 
             cv2.imshow(WIN_NAME, frame)
             key = cv2.waitKey(1) & 0xFF
