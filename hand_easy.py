@@ -218,7 +218,7 @@ def fuse_depth(Zw, Zl, curl, side, palm_front,
 
 
 def draw_hud(img, fps, palm_width, palm_length,
-             curl, side, Zw, Zl, Z_final, w_w, w_l, calib: CalibState):
+             curl, side, Zw, Zl, Z_final, w_w, w_l, calib: CalibState, palm_front):
     h, w, _ = img.shape
     y = 30
     dy = 22
@@ -237,6 +237,7 @@ def draw_hud(img, fps, palm_width, palm_length,
         f"{Zl if Zl is not None else -1:6.2f}")
     put(f"Z_final     : {Z_final if Z_final is not None else -1:6.2f}")
     put(f"weights w_w,w_l: {w_w:4.2f}, {w_l:4.2f}")
+    put(f"palm_front (0-1): {palm_front:4.2f}")
 
     if calib.k_w is None or calib.k_l is None:
         put("Calib: NOT SET  (press 'c' to calibrate)")
@@ -289,6 +290,7 @@ def main():
             Z_final = None
             w_w = 0.0
             w_l = 0.0
+            palm_front = 0.0
 
             if result.multi_hand_landmarks:
                 hand_lms = result.multi_hand_landmarks[0]
@@ -313,7 +315,7 @@ def main():
                 # 掌心 / 手背
                 face_sign = compute_face_sign(lms)           # [-1,1]
                 palm_front = 0.5 * (face_sign + 1.0)        # 映射到 [0,1]
-                palm_front = clamp(palm_front, 0.0, 1.0)
+                palm_front = 1-clamp(palm_front, 0.0, 1.0)
 
                 # 用标定结果从 px 算距离
                 if calib.k_w is not None and palm_width > 1e-3:
@@ -353,7 +355,7 @@ def main():
             last_t = now
 
             draw_hud(frame, fps, palm_width, palm_length,
-                     curl, side, Zw, Zl, Z_final, w_w, w_l, calib)
+                     curl, side, Zw, Zl, Z_final, w_w, w_l, calib, palm_front)
 
             cv2.imshow(WIN_NAME, frame)
             key = cv2.waitKey(1) & 0xFF
