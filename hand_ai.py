@@ -8,7 +8,7 @@ import numpy as np, mediapipe as mp
 # —— 基础窗口/开关 ——
 WIN = "Hand Depth (Unified Minimal)"  # 窗口标题
 MAX_NUM_HANDS = 1                     # 同时跟踪的手数（>1 会更慢）
-DRAW_LANDMARKS = False                # 是否在画面上绘制 21 点骨架
+DRAW_LANDMARKS = True                # 是否在画面上绘制 21 点骨架
 
 # —— 标定（按 c 时会连续采样） ——
 CALIB_SAMPLES = 30    # 标定采样帧数；更大更稳（噪声更小），但标定更慢
@@ -44,9 +44,12 @@ mp_hands  = mp.solutions.hands
 mp_draw   = mp.solutions.drawing_utils
 mp_styles = mp.solutions.drawing_styles
 
+
+
+
 def smoothstep(x, lo, hi):
     t = clip((x - lo) / max(1e-6, hi - lo), 0.0, 1.0)
-    return t * t * (3 - 2 * t)  # C1 连续，过渡干净
+    return t * t * (3 - 2 * t)
 
 def draw_text(img, txt, x, y, color=(255,255,255), scale=0.6):
     cv2.putText(img, txt, (x, y), cv2.FONT_HERSHEY_SIMPLEX, scale, (0,0,0), 3, cv2.LINE_AA)
@@ -59,7 +62,12 @@ def l2(p, q):
 def fmt1(x):
     return "—" if x is None or (isinstance(x, float) and math.isnan(x)) else f"{x:.1f}"
 
-def clip(v, lo, hi): return max(lo, min(hi, v))
+def clip(v, lo, hi): 
+    return max(lo, min(hi, v))
+
+
+
+
 
 @dataclass
 class Measurements:
@@ -85,13 +93,16 @@ class RuntimeState:
     z_hist: deque = field(default_factory=lambda: deque(maxlen=MED_WIN))
     Z_slew_cm: Optional[float] = None
 
+
+
+
 def extract_meas(hand_landmarks, img_w, img_h):
     if not hand_landmarks:
         return None
     lm = hand_landmarks[0].landmark
 
     pts_px  = np.array([(int(l.x * img_w), int(l.y * img_h)) for l in lm], dtype=np.int32)
-    pts_3d  = np.array([(l.x, l.y, l.z) for l in lm], dtype=np.float32)  # z<0 朝相机
+    pts_3d  = np.array([(l.x, l.y, l.z) for l in lm], dtype=np.float32)
 
     p0, p5, p9, p10, p11, p12, p17 = pts_px[0], pts_px[5], pts_px[9], pts_px[10], pts_px[11], pts_px[12], pts_px[17]
 
@@ -103,26 +114,26 @@ def extract_meas(hand_landmarks, img_w, img_h):
         l2(p11, p12)
     )
 
+    # 投影因子 s
     def s_of(v):
         n3 = float(np.linalg.norm(v)) + 1e-6
         n2 = float(np.linalg.norm(v[:2]))
         return clip(n2 / n3, 0.0, 1.0)
 
-    vw   = pts_3d[17] - pts_3d[5]
-    s_w  = s_of(vw)
+    # 宽通道：一段
+    vw = pts_3d[17] - pts_3d[5]
+    s_w = s_of(vw)
 
-    v0 = pts_3d[9]  - pts_3d[0]
-    v1 = pts_3d[10] - pts_3d[9]
-    v2 = pts_3d[11] - pts_3d[10]
-    v3 = pts_3d[12] - pts_3d[11]
-    segs = [v0, v1, v2, v3]
-    sum_xy = 0.0
-    sum_3d = 0.0
+    segs = [pts_3d[9]  - pts_3d[0], 
+            pts_3d[10] - pts_3d[9], 
+            pts_3d[11] - pts_3d[10], 
+            pts_3d[12] - pts_3d[11]
+            ]
+
+    sum_xy , sum_3d = 0.0, 0.0
     for v in segs:
-        n3 = float(np.linalg.norm(v)) + 1e-6
-        n2 = float(np.linalg.norm(v[:2]))
-        sum_xy += n2
-        sum_3d += n3
+        sum_xy += float(np.linalg.norm(v)) + 1e-6
+        sum_3d += float(np.linalg.norm(v[:2]))
 
     chord3d = float(np.linalg.norm(pts_3d[12] - pts_3d[9]))
     chain3d = (float(np.linalg.norm(pts_3d[10] - pts_3d[9])) +
@@ -134,6 +145,9 @@ def extract_meas(hand_landmarks, img_w, img_h):
     s_l = clip(sum_xy / (sum_3d + 1e-6)-curl*0.1, 0.0, 1.0)
 
     return Measurements(w_px, l_px, s_w, s_l, tuple(p0), tuple(p5), tuple(p9), tuple(p17), curl)
+
+
+
 
 def start_collect(calib: CalibState):
     calib.collecting = True
@@ -153,35 +167,44 @@ def z_from_channel(f_pix, L_nom_cm, s, ell_px):
     return clip((f_pix * L_nom_cm * s) / float(ell_px), 0.0, Z_MAX_CM)
 
 def estimate_fused_Z(meas: Measurements, calib: CalibState):
+    # 先各自算单路 Z
     Zw = z_from_channel(calib.f_w, W_CM, meas.s_w, meas.w_px) if calib.f_w else None
     Zl = z_from_channel(calib.f_l, L_CM, meas.s_l, meas.l_px) if calib.f_l else None
 
-    if Zw is None and Zl is None: return None, None, None
-    if Zl is None: return Zw, Zw, None
-    if Zw is None: return Zl, None, Zl
+    # 只有一路可用的情况
+    if Zw is None and Zl is None:
+        return None, None, None
+    if Zl is None:
+        return Zw, Zw, None
+    if Zw is None:
+        return Zl, None, Zl
 
-    g = smoothstep(meas.s_w, S_W_LO, S_W_HI)
+    # 规则：谁的 s 大选谁（同时考虑一下阈值与兜底）
+    prefer_w = (meas.s_w >= meas.s_l)
 
-    ww = (meas.s_w ** WEIGHT_EXP) if meas.s_w > S_VIS_TH else 0.0
-    ww *= WIDTH_BIAS * (1.0 + CURL_BOOST_W * g * meas.curl)
-
-    wl = (meas.s_l ** WEIGHT_EXP) if meas.s_l > S_VIS_TH else 0.0
-    wl *= math.exp(-CURL_K * g * meas.curl)
-
-    if ww == 0.0 and wl == 0.0:
-        Z = Zw if meas.s_w >= meas.s_l else Zl
-        return Z, Zw, Zl
-
-    rel = abs(Zw - Zl) / max(1e-6, 0.5 * (Zw + Zl))
-    if rel < AGREE_FRAC and (ww > 0 and wl > 0):
-        Z = (ww * Zw + wl * Zl) / (ww + wl)
-        return Z, Zw, Zl
-
-    if abs(ww - wl) < 0.1 * (ww + wl + 1e-6):
-        Z = Zw
+    if prefer_w:
+        # 优先用 Zw；若 s_w 太小或 Zw 无效，退回 Zl
+        if (meas.s_w > S_VIS_TH) and (Zw is not None):
+            return Zw, Zw, Zl
+        elif (meas.s_l > S_VIS_TH) and (Zl is not None):
+            return Zl, Zw, Zl
+        else:
+            # 都低于阈值，就按 s 的大小硬选
+            Z = Zw if meas.s_w >= meas.s_l else Zl
+            return Z, Zw, Zl
     else:
-        Z = Zw if ww >= wl else Zl
-    return Z, Zw, Zl
+        # 优先用 Zl；若 s_l 太小或 Zl 无效，退回 Zw
+        if (meas.s_l > S_VIS_TH) and (Zl is not None):
+            return Zl, Zw, Zl
+        elif (meas.s_w > S_VIS_TH) and (Zw is not None):
+            return Zw, Zw, Zl
+        else:
+            Z = Zl if meas.s_l >= meas.s_w else Zw
+            return Z, Zw, Zl
+
+
+
+
 
 
 def main():
@@ -189,9 +212,7 @@ def main():
     cap = cv2.VideoCapture(0); cap.set(cv2.CAP_PROP_FRAME_WIDTH,1280); cap.set(cv2.CAP_PROP_FRAME_HEIGHT,720)
     calib = CalibState(); state = RuntimeState(); last_t = time.time()
 
-    with mp_hands.Hands(static_image_mode=False, max_num_hands=MAX_NUM_HANDS,
-                        model_complexity=1, min_detection_confidence=0.5,
-                        min_tracking_confidence=0.5) as hands:
+    with mp_hands.Hands(static_image_mode=False, max_num_hands=MAX_NUM_HANDS,model_complexity=1, min_detection_confidence=0.5,min_tracking_confidence=0.5) as hands:
         while True:
             ok, frame = cap.read()
             if not ok: break
@@ -208,15 +229,17 @@ def main():
 
             if DRAW_LANDMARKS and res.multi_hand_landmarks:
                 for hlm in res.multi_hand_landmarks:
-                    mp_draw.draw_landmarks(frame, hlm, mp_hands.HAND_CONNECTIONS,
-                                           mp_styles.get_default_hand_landmarks_style(),
-                                           mp_styles.get_default_hand_connections_style())
+                    mp_draw.draw_landmarks(frame, hlm, mp_hands.HAND_CONNECTIONS,mp_styles.get_default_hand_landmarks_style(),mp_styles.get_default_hand_connections_style())
 
             if calib.collecting:
                 draw_text(frame, "[Calib] Keep steady at D", 10, 24, (180,230,255))
                 if meas is not None:
-                    if meas.w_px and meas.w_px>1: calib.q_w_px.append(meas.w_px); calib.q_sw.append(meas.s_w)
-                    if meas.l_px and meas.l_px>1: calib.q_l_px.append(meas.l_px); calib.q_sl.append(meas.s_l)
+                    if meas.w_px and meas.w_px>1: 
+                        calib.q_w_px.append(meas.w_px)
+                        calib.q_sw.append(meas.s_w)
+                    if meas.l_px and meas.l_px>1: 
+                        calib.q_l_px.append(meas.l_px)
+                        calib.q_sl.append(meas.s_l)
                 draw_text(frame, f"w {len(calib.q_w_px)}/{CALIB_SAMPLES} | l {len(calib.q_l_px)}/{CALIB_SAMPLES}", 10, 48, (180,230,255))
                 if len(calib.q_w_px)>=CALIB_SAMPLES and len(calib.q_l_px)>=CALIB_SAMPLES:
                     okf = finish_collect_and_compute_f(calib)
@@ -238,16 +261,29 @@ def main():
                     state.Z_ema_cm = Z_slew if state.Z_ema_cm is None else (EMA_ALPHA*Z_slew + (1-EMA_ALPHA)*state.Z_ema_cm)
 
 
-            if dt>0: state.fps = 0.9*state.fps + 0.1*(1.0/dt) if state.fps>0 else (1.0/dt)
+            if dt>0: 
+                if state.fps>0: 
+                    state.fps = 0.9*state.fps + 0.1*(1.0/dt)
+                else:
+                    state.fps = (1.0/dt)
 
             y=24
-            draw_text(frame, f"FPS {state.fps:5.1f}", 10, y); y+=24
-            if calib.f_w or calib.f_l: draw_text(frame, f"f_w={fmt1(calib.f_w)} f_l={fmt1(calib.f_l)}", 10, y, (200,255,200)); y+=24
-            else: draw_text(frame, "Press 'c' to calibrate", 10, y, (80,230,255)); y+=24
-            if meas is not None: draw_text(frame, f"s_w={meas.s_w:.2f} s_l={meas.s_l:.2f}", 10, y); y+=24
+            draw_text(frame, f"FPS {state.fps:5.1f}", 10, y)
+            y+=24
+            if calib.f_w or calib.f_l: 
+                draw_text(frame, f"f_w={fmt1(calib.f_w)} f_l={fmt1(calib.f_l)}", 10, y, (200,255,200))
+                y+=24
+            else:
+                draw_text(frame, "Press 'c' to calibrate", 10, y, (80,230,255))
+                y+=24
+            if meas is not None: 
+                draw_text(frame, f"s_w={meas.s_w:.2f} s_l={meas.s_l:.2f}", 10, y)
+                y+=24
             if Z is not None:
-                draw_text(frame, f"Z={fmt1(Z)}cm  Zw={fmt1(Zw)}  Zl={fmt1(Zl)}", 10, y, (255,220,180)); y+=24
-                if state.Z_ema_cm is not None: draw_text(frame, f"Z_ema={fmt1(state.Z_ema_cm)}cm", 10, y, (255,220,180)); y+=24
+                draw_text(frame, f"Z={fmt1(Z)}cm  Zw={fmt1(Zw)}  Zl={fmt1(Zl)}", 10, y, (255,220,180))
+                y+=24
+                if state.Z_ema_cm is not None: draw_text(frame, f"Z_ema={fmt1(state.Z_ema_cm)}cm", 10, y, (255,220,180))
+                y+=24
 
             if meas is not None:
                 cx,cy = meas.p0
