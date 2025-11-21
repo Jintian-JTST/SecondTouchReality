@@ -1,15 +1,16 @@
 # -*- coding: utf-8 -*-
-# hand_two_hands_z_udp.py
+# hand_udp_vectors.py
 """
-从 hand_easy 复用距离估计逻辑：
-- 仍然用 hand_easy 里的 CalibState / RuntimeState / 各种 compute_* / fuse_depth；
-- Z 深度的最终显示值 Z_disp，原样作为 wrist_z_m 通过 UDP 发给 Unity；
-- 支持最多 2 只手，但 Z_disp 只对第 1 只手（hand_index=0）做滤波，与 hand_easy 行为一致。
+目标：
+  1) 只获取掌根位置（像素 + 归一化 + 深度米）；
+  2) 从 MediaPipe 的 21 点计算手部骨骼方向向量（单位向量）；
+  3) 通过 UDP 把这些信息发给 Unity / 其他程序；
+  4) 后端（Python / Unity）用「掌根 3D 位置 + 每节骨骼长度 + 骨骼方向向量」重建 21 个点。
 
 按键：
-  q / Esc  退出
-  c  标定（正对摄像头、手张开，采样 50 帧后在终端输入真实距离）
-  r  重置标定
+  q / ESC : 退出
+  c       : 开始标定（采样 50 帧，然后在终端输入真实距离）
+  r       : 重置标定
 """
 
 import cv2
@@ -18,8 +19,9 @@ import numpy as np
 import socket
 import json
 import time
+from collections import defaultdict
 
-# 从 hand_easy 导入你原来的所有逻辑
+# ======== 从 hand_easy 复用深度逻辑 ========
 from hand_easy import (
     CalibState,
     RuntimeState,
@@ -27,34 +29,41 @@ from hand_easy import (
     compute_curl,
     compute_side,
     compute_face_sign,
-    compute_palm_center_px,
     fuse_depth,
     clamp,
 )
 
-WIN_NAME = "TwoHandsDepthUDP"
+# ======== 配置 ========
+WIN_NAME = "Hand UDP Vectors"
 
+# UDP 地址（Unity 那边要监听同样端口）
+UDP_IP = "127.0.0.1"
+UDP_PORT = 5065
+
+# EMA 平滑
+EMA_ALPHA = 0.35
+
+# MediaPipe
 mp_hands = mp.solutions.hands
 mp_drawing = mp.solutions.drawing_utils
 mp_styles = mp.solutions.drawing_styles
 
-# ---- UDP 配置 ----
-UDP_IP = "127.0.0.1"
-UDP_PORT = 5065
-
+# 骨骼拓扑：from_idx -> to_idx
+BONE_PAIRS = [
+    (0, 1), (1, 2), (2, 3), (3, 4),      # 拇指
+    (0, 5), (5, 6), (6, 7), (7, 8),      # 食指
+    (0, 9), (9, 10), (10, 11), (11, 12), # 中指
+    (0, 13), (13, 14), (14, 15), (15, 16), # 无名指
+    (0, 17), (17, 18), (18, 19), (19, 20)  # 小指
+]
 
 def draw_text_lines(img, lines, org=(10, 30), dy=22, color=(0, 255, 0)):
     x, y = org
     for line in lines:
         cv2.putText(
-            img,
-            line,
-            (x, y),
-            cv2.FONT_HERSHEY_SIMPLEX,
-            0.6,
-            color,
-            1,
-            cv2.LINE_AA,
+            img, line, (x, y),
+            cv2.FONT_HERSHEY_SIMPLEX, 0.6,
+            color, 1, cv2.LINE_AA
         )
         y += dy
 
@@ -68,10 +77,13 @@ def main():
         print("无法打开摄像头")
         return
 
+    # 标定状态：全局一份（和 hand_easy 一样）
     calib = CalibState()
-    state = RuntimeState()   # 注意：只一个，全局 state，和 hand_easy 一样
+    # 每只手一个 RuntimeState，用于各自的深度平滑（避免两只手互相干扰）
+    states = defaultdict(RuntimeState)
+
     last_t = time.time()
-    EMA_ALPHA = 0.35
+    fps = 0.0
 
     # UDP
     sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
@@ -83,32 +95,29 @@ def main():
     try:
         with mp_hands.Hands(
             static_image_mode=False,
-            max_num_hands=2,           # 和原来两手脚本一样
+            max_num_hands=2,
             model_complexity=0,
             min_detection_confidence=0.5,
             min_tracking_confidence=0.5,
         ) as hands:
 
             while True:
-                ret, frame = cap.read()
-                if not ret:
+                ok, frame = cap.read()
+                if not ok:
                     print("读取摄像头失败")
                     break
 
-                # 和 hand_easy 一样，把图像左右翻转
+                # 和 hand_easy 一样镜像翻转，保持直观
                 frame = cv2.flip(frame, 1)
-                h, w, _ = frame.shape
+                h, w = frame.shape[:2]
 
                 # FPS
                 now = time.time()
                 dt = now - last_t
-                if dt > 0:
-                    fps = 1.0 / dt
-                else:
-                    fps = 0.0
+                fps = 1.0 / dt if dt > 0 else 0.0
                 last_t = now
 
-                # 送给 MediaPipe
+                # MediaPipe 推理
                 rgb = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
                 rgb.flags.writeable = False
                 res = hands.process(rgb)
@@ -116,7 +125,7 @@ def main():
 
                 hands_out = []
 
-                # ===== 标定采样（完全照 hand_easy 的写法，只看第 1 只手）=====
+                # ===== 标定采样：只看第 1 只检测到的手 =====
                 if calib.sampling and res.multi_hand_landmarks:
                     lms0 = res.multi_hand_landmarks[0].landmark
                     palm_w, palm_l = compute_palm_width_and_length(lms0, w, h)
@@ -129,7 +138,7 @@ def main():
                         l_med = float(np.median(calib.samples_l))
 
                         print("=" * 60)
-                        print("标定采样结束。请保持刚才的姿态/距离不动。")
+                        print("标定采样结束，请保持刚才姿态不动。")
                         print(f"中位数掌宽: {w_med:.2f} px")
                         print(f"中位数掌长: {l_med:.2f} px")
                         d_real = float(input("请输入此时掌根到摄像头的真实距离(米): ").strip())
@@ -143,12 +152,12 @@ def main():
                         print(f"标定完成: k_w={calib.k_w:.4f}, k_l={calib.k_l:.4f}")
                         print("=" * 60)
 
-                # ===== 每只手处理 & 打包 =====
+                # ===== 处理每只手 =====
                 if res.multi_hand_landmarks:
                     for hi, hand_lms in enumerate(res.multi_hand_landmarks):
                         lms = hand_lms.landmark
 
-                        # 画手
+                        # 可视化骨架
                         mp_drawing.draw_landmarks(
                             frame,
                             hand_lms,
@@ -157,16 +166,22 @@ def main():
                             mp_styles.get_default_hand_connections_style(),
                         )
 
-                        # 掌心中心，用来贴 HUD（不发到 Unity）
-                        palm_cx, palm_cy = compute_palm_center_px(lms, w, h)
+                        # ------------- 1) 掌根像素 / 标定深度 -------------
+                        wrist_lm = lms[0]
+                        wrist_nx = float(wrist_lm.x)
+                        wrist_ny = float(wrist_lm.y)
+                        wrist_nz = float(wrist_lm.z)
 
-                        # 计算你原来的全部特征
+                        wrist_px = int(wrist_nx * w)
+                        wrist_py = int(wrist_ny * h)
+
+                        # 深度估计（完全沿用 hand_easy 的逻辑）
                         palm_width, palm_length = compute_palm_width_and_length(lms, w, h)
                         curl = compute_curl(lms, w, h)
                         side = compute_side(palm_width, palm_length, calib)
+                        face_sign = compute_face_sign(lms)  # [-1,1]
 
-                        face_sign = compute_face_sign(lms)        # [-1,1]
-                        palm_front = 0.5 * (face_sign + 1.0)     # 映射到 [0,1]
+                        palm_front = 0.5 * (face_sign + 1.0)
                         palm_front = 1.0 - clamp(palm_front, 0.0, 1.0)
 
                         Zw = None
@@ -176,79 +191,72 @@ def main():
                         if calib.k_l is not None and palm_length > 1e-3:
                             Zl = calib.k_l / palm_length
 
-                        Z_final_raw, w_w, w_l = fuse_depth(Zw, Zl, curl, side, palm_front)
+                        Z_raw, w_w, w_l = fuse_depth(Zw, Zl, curl, side, palm_front)
 
-                        # ===== 关键：Z_disp 逻辑，完全照 hand_easy =====
-                        Z_disp = None
-                        if hi == 0 and Z_final_raw is not None:
-                            # 只对第 1 只手做滤波，使用同一个 state
-                            state.z_hist.append(Z_final_raw)
-                            Z_med = float(np.median(state.z_hist))
-
-                            if state.z_ema is None:
-                                state.z_ema = Z_med
+                        wrist_depth_m = None
+                        if Z_raw is not None:
+                            st = states[hi]
+                            st.z_hist.append(Z_raw)
+                            Z_med = float(np.median(st.z_hist))
+                            if st.z_ema is None:
+                                st.z_ema = Z_med
                             else:
-                                state.z_ema = EMA_ALPHA * Z_med + (1.0 - EMA_ALPHA) * state.z_ema
+                                st.z_ema = EMA_ALPHA * Z_med + (1.0 - EMA_ALPHA) * st.z_ema
+                            wrist_depth_m = st.z_ema
 
-                            Z_disp = state.z_ema
+                        # ------------- 2) 计算 21 点 -> 20 条骨骼方向向量 -------------
+                        # 用归一化坐标 (x, y, z) 当作相机坐标系里的“形状”，只取方向
+                        coords = [(float(p.x), float(p.y), float(p.z)) for p in lms]
 
-                        # ===== landmarks 打包（和你之前 rec 的结构保持一致）=====
-                        lm_list = []
-                        for idx, lm in enumerate(lms):
-                            nx = float(lm.x)
-                            ny = float(lm.y)
-                            nz = float(lm.z)
+                        bones_out = []
+                        for bi, (a, b) in enumerate(BONE_PAIRS):
+                            ax, ay, az = coords[a]
+                            bx, by, bz = coords[b]
+                            dx = bx - ax
+                            dy = by - ay
+                            dz = bz - az
+                            length = (dx * dx + dy * dy + dz * dz) ** 0.5
+                            if length < 1e-6:
+                                dirx = diry = dirz = 0.0
+                            else:
+                                dirx = dx / length
+                                diry = dy / length
+                                dirz = dz / length
 
-                            px = int(nx * w)
-                            py = int(ny * h)
+                            bones_out.append({
+                                "id": bi,
+                                "from": a,
+                                "to": b,
+                                "dir": [dirx, diry, dirz]
+                            })
 
-                            z_rel = nz
-                            z_vis = abs(z_rel)
-
-                            lm_list.append(
-                                {
-                                    "id": int(idx),
-                                    "normalized": {"x": nx, "y": ny, "z": nz},
-                                    "pixel": {"x": px, "y": py},
-                                    "z_rel": float(z_rel),
-                                    "z_vis": float(z_vis),
-                                }
-                            )
-
+                        # ------------- 3) 打包 hand JSON -------------
                         hand_dict = {
                             "hand_index": int(hi),
-                            # 这里就是 hand_easy 里的 Z_disp，一模一样
-                            "wrist_z_m": None if Z_disp is None else float(Z_disp),
-                            "landmarks": lm_list,
+                            "wrist": {
+                                "pixel": {"x": wrist_px, "y": wrist_py},
+                                "normalized": {
+                                    "x": wrist_nx,
+                                    "y": wrist_ny,
+                                    "z": wrist_nz,
+                                },
+                                "depth_m": None if wrist_depth_m is None else float(wrist_depth_m),
+                            },
+                            "bones": bones_out,
                         }
                         hands_out.append(hand_dict)
 
-                        # 在画面上给第 1 只手画 HUD，方便你对比数值
-                        if hi == 0:
-                            hud_lines = []
-                            hud_lines.append(
-                                f"Z_disp: {Z_disp if Z_disp is not None else -1:6.2f}"
-                            )
-                            if calib.k_w is None or calib.k_l is None:
-                                hud_lines.append("Calib: NOT SET (c=calibrate)")
-                            else:
-                                hud_lines.append(
-                                    f"Calib: OK  k_w={calib.k_w:.1f} k_l={calib.k_l:.1f}"
-                                )
-                            hud_lines.append(f"curl={curl:4.2f}, side={side:4.2f}")
-                            hud_lines.append(
-                                f"Zw={Zw if Zw is not None else -1:5.2f}, "
-                                f"Zl={Zl if Zl is not None else -1:5.2f}"
-                            )
-                            draw_text_lines(
-                                frame,
-                                hud_lines,
-                                org=(palm_cx + 10, palm_cy - 40),
-                                dy=18,
-                                color=(255, 255, 255),
+                        # 屏幕 HUD（在掌根旁边画一下深度，方便你对比 hand_easy）
+                        if wrist_depth_m is not None:
+                            text = f"Z: {wrist_depth_m:.3f} m"
+                            cv2.putText(
+                                frame, text,
+                                (wrist_px + 10, wrist_py - 10),
+                                cv2.FONT_HERSHEY_SIMPLEX,
+                                0.6, (255, 255, 255), 1, cv2.LINE_AA
                             )
 
-                # ===== 发送 UDP =====
+                # ===== 4) UDP 发送 =====
                 payload = {
                     "timestamp": time.time(),
                     "fps": float(fps),
@@ -260,16 +268,20 @@ def main():
                 except Exception:
                     pass
 
-                # 画全局 HUD
-                lines = [f"FPS: {fps:5.1f}"]
+                # 全局 HUD
+                hud = [f"FPS: {fps:5.1f}"]
                 if calib.sampling:
-                    lines.append(f"Sampling... {len(calib.samples_w)} frames")
-                draw_text_lines(frame, lines, org=(10, 30), dy=22, color=(0, 255, 0))
+                    hud.append(f"Calib sampling... {len(calib.samples_w)}/50")
+                elif calib.k_w is None or calib.k_l is None:
+                    hud.append("Calib: NOT SET (press 'c')")
+                else:
+                    hud.append("Calib: OK (press 'r' to reset)")
+                draw_text_lines(frame, hud, org=(10, 30), dy=22)
 
                 cv2.imshow(WIN_NAME, frame)
                 key = cv2.waitKey(1) & 0xFF
 
-                if key == 27 or key == ord("q"):
+                if key in (27, ord("q")):
                     break
                 elif key == ord("c") and not calib.sampling:
                     calib.sampling = True
@@ -277,19 +289,19 @@ def main():
                     calib.samples_l.clear()
                     print("=" * 60)
                     print("开始标定：")
-                    print("请将一只手掌 **完全张开、正对摄像头**，保持不动。")
+                    print("请将单手掌 **完全张开、正对摄像头**，保持不动。")
                     print("会自动采样约 50 帧，结束后在终端输入真实距离(米)。")
                     print("=" * 60)
                 elif key == ord("r"):
-                    calib.k_w = None
-                    calib.k_l = None
-                    calib.w_ref_open = None
-                    calib.l_ref_open = None
+                    calib.k_w = calib.k_l = None
+                    calib.w_ref_open = calib.l_ref_open = None
                     calib.sampling = False
                     calib.samples_w.clear()
                     calib.samples_l.clear()
-                    state.z_hist.clear()
-                    state.z_ema = None
+                    # 重置所有手的运行状态
+                    for st in states.values():
+                        st.z_hist.clear()
+                        st.z_ema = None
                     print("标定已重置。")
 
     finally:

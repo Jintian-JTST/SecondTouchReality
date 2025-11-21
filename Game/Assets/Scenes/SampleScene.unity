@@ -334,16 +334,35 @@ MonoBehaviour:
   m_GameObject: {fileID: 2068442403}
   m_Enabled: 1
   m_EditorHideFlags: 0
-  m_Script: {fileID: 11500000, guid: 8867d3a6c2891744aa2cbca7d73650a6, type: 3}
+  m_Script: {fileID: 11500000, guid: 4f7d81f0a126d284b970975723f1e850, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
   listenPort: 5065
-  landmarkCount: 21
-  handPlaneWidth: 0.3
-  handPlaneHeight: 0.2
+  targetCamera: {fileID: 963194227}
   depthScale: 1
-  zRelScale: 1
-  sphereRadius: 0.005
+  sphereRadius: 0.01
+  drawBones: 1
+  boneLengths:
+  - 0
+  - 0
+  - 0
+  - 0
+  - 0
+  - 0
+  - 0
+  - 0
+  - 0
+  - 0
+  - 0
+  - 0
+  - 0
+  - 0
+  - 0
+  - 0
+  - 0
+  - 0
+  - 0
+  - 0
 --- !u!4 &2068442405
 Transform:
   m_ObjectHideFlags: 0
