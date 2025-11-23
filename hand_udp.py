@@ -272,6 +272,7 @@ def main():
                                     "z": wrist_nz,
                                 },
                                 "depth_m": None if wrist_depth_m is None else float(wrist_depth_m),
+                                "depth_cm": None if wrist_depth_m is None else round(float(wrist_depth_m) * 100.0, 2),
                             },
                             "bones": bones_out,
                         }
@@ -280,7 +281,8 @@ def main():
                         # HUD 上标一下深度和 pinch
                         txt = ""
                         if wrist_depth_m is not None:
-                            txt += f"Z: {wrist_depth_m:.3f}m  "
+                            # 转成厘米，两位小数
+                            txt += f"Z: {wrist_depth_m * 100:.2f}cm  "
                         txt += f"pinch: {is_pinch}"
                         cv2.putText(
                             frame, txt,

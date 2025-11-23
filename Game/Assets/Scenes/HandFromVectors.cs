@@ -111,6 +111,10 @@ public class HandFromVectors : MonoBehaviour
     private Vector3[,] jointPositions;    // [hand, jointId]
     private LineRenderer[,] boneLines;    // [hand, boneIndex]
 
+    // 给外部脚本用的当前状态
+    private bool[] hasHand = new bool[MaxHands];   // 当前这一帧，这个 handIndex 上有没有手
+    private bool[] currentPinch = new bool[MaxHands]; // 当前这一帧，这只手有没有 pinch
+
     // 最新一帧收到的所有手
     private HandData[] latestHands;
     private readonly object handLock = new object();
@@ -299,9 +303,15 @@ public class HandFromVectors : MonoBehaviour
                 handsCopy = (HandData[])latestHands.Clone();
         }
 
+        // 每帧先清空标记
+        for (int i = 0; i < MaxHands; i++)
+        {
+            hasHand[i] = false;
+            currentPinch[i] = false;
+        }
+
         if (handsCopy == null || targetCamera == null)
         {
-            // 没有手的时候，把球放手，让它掉下去
             if (grabSphereRb != null && grabbedHand != -1)
             {
                 grabSphereRb.useGravity = true;
@@ -310,6 +320,7 @@ public class HandFromVectors : MonoBehaviour
             }
             return;
         }
+
 
         // 先清空所有手的显示
         for (int h = 0; h < MaxHands; h++)
@@ -331,11 +342,20 @@ public class HandFromVectors : MonoBehaviour
         for (int h = 0; h < handCount; h++)
         {
             HandData hand = handsCopy[h];
-            if (hand == null || hand.wrist == null) continue;
+            if (hand == null || hand.wrist == null)
+            {
+                hasHand[h] = false;
+                currentPinch[h] = false;
+                continue;
+            }
+
+            hasHand[h] = true;
+            currentPinch[h] = hand.pinch;
 
             // 1) 掌根世界坐标
             Vector3 wristWorldPos = ComputeWristWorldPos(hand.wrist, targetCamera, depthScale);
             jointPositions[h, 0] = wristWorldPos;
+
 
             // 2) 骨骼链条重建 21 个关节
             if (hand.bones != null && hand.bones.Length > 0)
@@ -412,36 +432,6 @@ public class HandFromVectors : MonoBehaviour
             bool pinchNow = hand.pinch;
             bool pinchPrev = lastPinch[h];
 
-            if (enableGrabSphere && grabSphere != null && grabSphereRb != null)
-            {
-                // 刚从没捏 -> 捏：开始抓球
-                if (!pinchPrev && pinchNow)
-                {
-                    grabbedHand = h;
-                    grabSphereRb.useGravity = false;
-                    grabSphereRb.velocity = Vector3.zero;
-
-                    if (grabJointIndex < 0 || grabJointIndex > 20)
-                        grabJointIndex = 8; // 保底
-
-                    grabSphere.transform.position = jointPositions[h, grabJointIndex];
-                }
-
-                // 正在被这只手捏着：球跟随这只手的指定关节（默认食指尖）
-                if (grabbedHand == h && pinchNow)
-                {
-                    if (grabJointIndex >= 0 && grabJointIndex <= 20)
-                        grabSphere.transform.position = jointPositions[h, grabJointIndex];
-                }
-
-                // 刚从捏 -> 松手：放开球，让球掉下去
-                if (grabbedHand == h && pinchPrev && !pinchNow)
-                {
-                    grabbedHand = -1;
-                    grabSphereRb.useGravity = true;
-                }
-            }
-
             lastPinch[h] = pinchNow;
         }
     }
@@ -473,15 +463,33 @@ public class HandFromVectors : MonoBehaviour
     }
 
     // ========== OnGUI: 调整骨骼长度的小窗口 ==========
-    void OnGUI()
+
+    // 让外部脚本查询：这一帧 handIndex 有没有手 && 是不是在 pinch
+    public bool IsHandPinching(int handIndex)
     {
-        guiWindowRect = GUI.Window(
-            12345,
-            guiWindowRect,
-            DrawBoneLengthWindow,
-            "Hand Bone Lengths"
-        );
+        if (handIndex < 0 || handIndex >= MaxHands) return false;
+        return hasHand[handIndex] && currentPinch[handIndex];
     }
+
+    // 让外部脚本拿某只手某个关节的世界坐标（成功返回 true）
+    public bool TryGetJointPosition(int handIndex, int jointIndex, out Vector3 position)
+    {
+        position = Vector3.zero;
+        if (handIndex < 0 || handIndex >= MaxHands) return false;
+        if (!hasHand[handIndex]) return false;
+        if (jointIndex < 0 || jointIndex >= 21) return false;
+
+        position = jointPositions[handIndex, jointIndex];
+        return true;
+    }
+
+    // 让外部脚本知道支持的最大手数
+    public int MaxHandCount
+    {
+        get { return MaxHands; }
+    }
+
+
 
     private void DrawBoneLengthWindow(int windowId)
     {

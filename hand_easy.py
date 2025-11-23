@@ -21,7 +21,7 @@ from dataclasses import dataclass, field
 from collections import deque
 
 WIN_NAME = "HandDepth"
-
+K=0.10  # 卷曲对距离的最大修正比例
 mp_hands = mp.solutions.hands
 mp_drawing = mp.solutions.drawing_utils
 mp_styles = mp.solutions.drawing_styles
@@ -157,7 +157,7 @@ def compute_side(palm_width_px, palm_length_px, calib: CalibState, gain=1.5):
 
 def fuse_depth(Zw, Zl, curl, side, palm_front,
                beta=1.0,      # 卷曲对掌宽的加权强度
-               k_curl=0.11,   # 正对+掌心+完全握拳时最多减 12%
+               k_curl=K,   # 正对+掌心+完全握拳时最多减 12%
                side_gain=1.8, # 把 side 放大一点，让侧向更“敏感”
                alpha_side=1.5 # side 对掌长权重的强化系数
                ):
