@@ -18,7 +18,7 @@ from sklearn.feature_extraction.text import HashingVectorizer
 from sklearn.linear_model import SGDClassifier
 from sklearn.preprocessing import LabelEncoder
 
-DATA_PATH = Path("text_object_dataset.jsonl")
+DATA_PATH = Path("cleaned_text_object_dataset.jsonl")
 MODEL_PATH = Path("text_model.pkl")
 
 # HashingVectorizer 的特征维度（可以调，但三个文件要一致）
@@ -27,7 +27,7 @@ N_FEATURES = 2 ** 18  # 262144 维，够用了
 
 def load_dataset() -> Tuple[List[str], List[str]]:
     if not DATA_PATH.exists():
-        raise FileNotFoundError(f"找不到数据文件: {DATA_PATH.resolve()}")
+        raise FileNotFoundError(f"Could not find data file: {DATA_PATH.resolve()}")
 
     texts: List[str] = []
     labels: List[str] = []
@@ -42,7 +42,7 @@ def load_dataset() -> Tuple[List[str], List[str]]:
             labels.append(rec["label"])
 
     if not texts:
-        raise RuntimeError("数据文件是空的，先用 collect_data.py 采一点数据。")
+        raise RuntimeError("Data file is empty, please run collect_data.py to collect some data.")
 
     return texts, labels
 
@@ -57,19 +57,19 @@ def init_vectorizer() -> HashingVectorizer:
 
 
 def train():
-    print("=== 训练文本分类模型 ===")
+    print("=== Train Text Classification Model ===")
     texts, labels = load_dataset()
-    print(f"加载到 {len(texts)} 条样本。")
+    print(f"Loaded {len(texts)} samples.")
 
     unique_labels = sorted(set(labels))
-    print(f"共有 {len(unique_labels)} 个不同的标签：{unique_labels}")
+    print(f"Total {len(unique_labels)} unique labels: {unique_labels}")
 
     vectorizer = init_vectorizer()
     X = vectorizer.transform(texts)
 
     # 是否已有旧模型
     if MODEL_PATH.exists():
-        print(f"\n检测到已有模型文件: {MODEL_PATH.resolve()}")
+        print(f"\nDetected existing model file: {MODEL_PATH.resolve()}")
         data = joblib.load(MODEL_PATH)
         clf: SGDClassifier = data["classifier"]
         label_encoder: LabelEncoder = data["label_encoder"]
@@ -78,12 +78,12 @@ def train():
         new_label_set = set(unique_labels)
         if new_label_set.issubset(old_classes):
             # 没有新标签：在旧参数基础上继续训练
-            print("没有发现新标签，将在旧模型参数基础上继续训练（partial_fit）。")
+            print("No new labels detected, continuing training on existing model.")
             y = label_encoder.transform(labels)
             clf.partial_fit(X, y)
         else:
             # 有新标签：从头重训
-            print("⚠️ 发现新的标签，与旧模型不一致，将从零开始重新训练。")
+            print("⚠️ New labels detected, retraining model from scratch.")
             label_encoder = LabelEncoder()
             y = label_encoder.fit_transform(labels)
             classes_indices = np.arange(len(label_encoder.classes_), dtype=np.int32)
@@ -97,7 +97,7 @@ def train():
             clf.partial_fit(X, y, classes=classes_indices)
     else:
         # 没有旧模型，第一次训练
-        print("未发现旧模型，将从零开始训练新模型。")
+        print("No old model found, training new model from scratch.")
         label_encoder = LabelEncoder()
         y = label_encoder.fit_transform(labels)
         classes_indices = np.arange(len(label_encoder.classes_), dtype=np.int32)
@@ -118,9 +118,9 @@ def train():
     }
     joblib.dump(model_data, MODEL_PATH)
 
-    print("\n✅ 训练完成。")
-    print(f"模型已保存到: {MODEL_PATH.resolve()}")
-    print(f"标签 classes: {list(label_encoder.classes_)}")
+    print("\n✅ Training complete.")
+    print(f"Model saved to: {MODEL_PATH.resolve()}")
+    print(f"Label classes: {list(label_encoder.classes_)}")
 
 
 if __name__ == "__main__":

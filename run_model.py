@@ -25,7 +25,7 @@ def init_vectorizer(n_features: int) -> HashingVectorizer:
 
 def load_model():
     if not MODEL_PATH.exists():
-        raise FileNotFoundError(f"找不到模型文件: {MODEL_PATH.resolve()}，先运行 train_model.py 训练一下。")
+        raise FileNotFoundError(f"Could not find model file: {MODEL_PATH.resolve()}, please run train_model.py first.")
 
     data = joblib.load(MODEL_PATH)
     clf = data["classifier"]
@@ -62,31 +62,31 @@ def infer_once(query: str, clf, label_encoder, vectorizer, top_k: int = 5) -> Li
 
 
 def main():
-    print("=== 文本 -> 物体标签 推理程序 ===")
+    print("=== text -> object label inference program ===")
     clf, label_encoder, vectorizer = load_model()
-    print(f"已加载模型: {MODEL_PATH.resolve()}")
-    print(f"支持的标签: {list(label_encoder.classes_)}")
-    print("输入一句描述，我会输出最可能的几个标签及其概率。")
-    print("输入空行 或 exit / quit 退出。\n")
+    print(f"Loaded model: {MODEL_PATH.resolve()}")
+    print(f"Supported labels: {list(label_encoder.classes_)}")
+    print("Enter a description, and I will output the most likely labels and their probabilities.")
+    print("Enter an empty line or 'exit' / 'quit' to exit.\n")
 
     while True:
         try:
             q = input("Query> ").strip()
         except (EOFError, KeyboardInterrupt):
-            print("\n退出。")
+            print("\nExiting.")
             break
 
         if not q or q.lower() in {"exit", "quit"}:
-            print("退出。")
+            print("Exiting.")
             break
 
         results = infer_once(q, clf, label_encoder, vectorizer, top_k=5)
-        print(f"\n结果（从高到低）：")
+        print(f"\nResults (from high to low):")
         for r in results:
             print(f"  label={r['label']!r}  prob={r['prob']:.3f}")
         print()
 
-    print("再见。")
+    print("Goodbye.")
 
 
 if __name__ == "__main__":

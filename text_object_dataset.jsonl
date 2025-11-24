@@ -1,4 +1,360 @@
-{"text": "a red apple", "label": "101", "timestamp": "2025-11-24T14:58:48"}
-{"text": "苹果", "label": "101", "timestamp": "2025-11-24T14:58:53"}
-{"text": "苹果", "label": "102", "timestamp": "2025-11-24T14:59:03"}
-{"text": "圆圆", "label": "101", "timestamp": "2025-11-24T14:59:13"}
+{"text": "red round apple", "label": "101"}
+{"text": "small red apple in my hand", "label": "101"}
+{"text": "红色的苹果", "label": "101"}
+{"text": "小红苹果 水果", "label": "101"}
+{"text": "bright red fruit apple", "label": "101"}
+
+{"text": "green apple", "label": "102"}
+{"text": "a sour green apple", "label": "102"}
+{"text": "青苹果", "label": "102"}
+{"text": "绿色的苹果 水果", "label": "102"}
+{"text": "crisp green fruit apple", "label": "102"}
+
+{"text": "yellow banana", "label": "103"}
+{"text": "a long yellow banana", "label": "103"}
+{"text": "香蕉", "label": "103"}
+{"text": "弯弯的黄色香蕉", "label": "103"}
+{"text": "sweet yellow fruit banana", "label": "103"}
+
+{"text": "orange fruit", "label": "104"}
+{"text": "a round orange", "label": "104"}
+{"text": "橙子 水果", "label": "104"}
+{"text": "桔子 小小一颗", "label": "104"}
+{"text": "sweet citrus orange", "label": "104"}
+
+{"text": "yellow lemon", "label": "105"}
+{"text": "a sour lemon", "label": "105"}
+{"text": "柠檬 小小的酸酸的", "label": "105"}
+{"text": "切开一半的柠檬", "label": "105"}
+{"text": "small yellow citrus lemon", "label": "105"}
+
+{"text": "green pear", "label": "106"}
+{"text": "a sweet pear fruit", "label": "106"}
+{"text": "梨 子", "label": "106"}
+{"text": "黄梨 一个", "label": "106"}
+{"text": "juicy pear in hand", "label": "106"}
+
+{"text": "soft peach", "label": "107"}
+{"text": "a pink peach", "label": "107"}
+{"text": "桃子 水果", "label": "107"}
+{"text": "毛茸茸的桃子", "label": "107"}
+{"text": "sweet juicy peach", "label": "107"}
+
+{"text": "red strawberry", "label": "108"}
+{"text": "a small strawberry", "label": "108"}
+{"text": "草莓", "label": "108"}
+{"text": "一颗红红的草莓", "label": "108"}
+{"text": "tiny red fruit strawberry", "label": "108"}
+
+{"text": "a bunch of grapes", "label": "109"}
+{"text": "purple grapes", "label": "109"}
+{"text": "一串葡萄", "label": "109"}
+{"text": "绿葡萄 一串", "label": "109"}
+{"text": "many small grapes on a stem", "label": "109"}
+
+{"text": "brown kiwi", "label": "110"}
+{"text": "green kiwi fruit", "label": "110"}
+{"text": "猕猴桃", "label": "110"}
+{"text": "一颗奇异果", "label": "110"}
+{"text": "small fuzzy kiwi", "label": "110"}
+
+{"text": "orange carrot", "label": "201"}
+{"text": "a long carrot", "label": "201"}
+{"text": "胡萝卜", "label": "201"}
+{"text": "长长的胡萝卜", "label": "201"}
+{"text": "crunchy carrot vegetable", "label": "201"}
+
+{"text": "green cucumber", "label": "202"}
+{"text": "long cucumber", "label": "202"}
+{"text": "黄瓜", "label": "202"}
+{"text": "长长的黄瓜", "label": "202"}
+{"text": "fresh green cucumber", "label": "202", "timestamp": "2025-11-24T15:11:05"}
+
+{"text": "red tomato", "label": "203"}
+{"text": "a round tomato", "label": "203"}
+{"text": "西红柿", "label": "203"}
+{"text": "番茄 一个", "label": "203", "timestamp": "2025-11-24T15:12:04"}
+{"text": "juicy tomato vegetable", "label": "203", "timestamp": "2025-11-24T15:12:05"}
+
+{"text": "brown potato", "label": "204", "timestamp": "2025-11-24T15:13:01"}
+{"text": "a small potato", "label": "204", "timestamp": "2025-11-24T15:13:02"}
+{"text": "土豆", "label": "204", "timestamp": "2025-11-24T15:13:03"}
+{"text": "圆圆的土豆", "label": "204", "timestamp": "2025-11-24T15:13:04"}
+{"text": "rough brown potato", "label": "204", "timestamp": "2025-11-24T15:13:05"}
+
+{"text": "broccoli floret", "label": "205", "timestamp": "2025-11-24T15:14:01"}
+{"text": "small broccoli piece", "label": "205", "timestamp": "2025-11-24T15:14:02"}
+{"text": "西兰花 小朵", "label": "205", "timestamp": "2025-11-24T15:14:03"}
+{"text": "小树一样的西兰花", "label": "205", "timestamp": "2025-11-24T15:14:04"}
+{"text": "green broccoli floret", "label": "205", "timestamp": "2025-11-24T15:14:05"}
+
+{"text": "corn cob", "label": "206", "timestamp": "2025-11-24T15:15:01"}
+{"text": "a yellow corn cob", "label": "206", "timestamp": "2025-11-24T15:15:02"}
+{"text": "玉米棒", "label": "206", "timestamp": "2025-11-24T15:15:03"}
+{"text": "一根玉米", "label": "206", "timestamp": "2025-11-24T15:15:04"}
+{"text": "many yellow corn kernels on a cob", "label": "206", "timestamp": "2025-11-24T15:15:05"}
+
+{"text": "ceramic mug", "label": "301", "timestamp": "2025-11-24T15:16:01"}
+{"text": "a coffee mug", "label": "301", "timestamp": "2025-11-24T15:16:02"}
+{"text": "马克杯", "label": "301", "timestamp": "2025-11-24T15:16:03"}
+{"text": "有把手的杯子", "label": "301", "timestamp": "2025-11-24T15:16:04"}
+{"text": "small ceramic cup with handle", "label": "301", "timestamp": "2025-11-24T15:16:05"}
+
+{"text": "small bowl", "label": "302", "timestamp": "2025-11-24T15:17:01"}
+{"text": "rice bowl", "label": "302", "timestamp": "2025-11-24T15:17:02"}
+{"text": "小碗", "label": "302", "timestamp": "2025-11-24T15:17:03"}
+{"text": "用来装汤的小碗", "label": "302", "timestamp": "2025-11-24T15:17:04"}
+{"text": "round white bowl", "label": "302", "timestamp": "2025-11-24T15:17:05"}
+
+{"text": "small plate", "label": "303", "timestamp": "2025-11-24T15:18:01"}
+{"text": "dessert plate", "label": "303", "timestamp": "2025-11-24T15:18:02"}
+{"text": "小盘子", "label": "303", "timestamp": "2025-11-24T15:18:03"}
+{"text": "用来放水果的小盘", "label": "303", "timestamp": "2025-11-24T15:18:04"}
+{"text": "flat round plate", "label": "303", "timestamp": "2025-11-24T15:18:05"}
+
+{"text": "metal spoon", "label": "304", "timestamp": "2025-11-24T15:19:01"}
+{"text": "small spoon for soup", "label": "304", "timestamp": "2025-11-24T15:19:02"}
+{"text": "勺子", "label": "304", "timestamp": "2025-11-24T15:19:03"}
+{"text": "用来舀汤的勺", "label": "304", "timestamp": "2025-11-24T15:19:04"}
+{"text": "silver spoon", "label": "304", "timestamp": "2025-11-24T15:19:05"}
+
+{"text": "metal fork", "label": "305", "timestamp": "2025-11-24T15:20:01"}
+{"text": "a small fork", "label": "305", "timestamp": "2025-11-24T15:20:02"}
+{"text": "叉子", "label": "305", "timestamp": "2025-11-24T15:20:03"}
+{"text": "用来叉食物的叉子", "label": "305", "timestamp": "2025-11-24T15:20:04"}
+{"text": "three prong fork", "label": "305", "timestamp": "2025-11-24T15:20:05"}
+
+{"text": "butter knife", "label": "306", "timestamp": "2025-11-24T15:21:01"}
+{"text": "small dull knife for butter", "label": "306", "timestamp": "2025-11-24T15:21:02"}
+{"text": "抹黄油的小刀", "label": "306", "timestamp": "2025-11-24T15:21:03"}
+{"text": "抹刀 厨房用", "label": "306", "timestamp": "2025-11-24T15:21:04"}
+{"text": "table butter knife", "label": "306", "timestamp": "2025-11-24T15:21:05"}
+
+{"text": "pair of chopsticks", "label": "307", "timestamp": "2025-11-24T15:22:01"}
+{"text": "wooden chopsticks", "label": "307", "timestamp": "2025-11-24T15:22:02"}
+{"text": "一双筷子", "label": "307", "timestamp": "2025-11-24T15:22:03"}
+{"text": "用来吃饭的筷子", "label": "307", "timestamp": "2025-11-24T15:22:04"}
+{"text": "long thin chopsticks", "label": "307", "timestamp": "2025-11-24T15:22:05"}
+
+{"text": "plastic cup", "label": "308", "timestamp": "2025-11-24T15:23:01"}
+{"text": "a light plastic cup", "label": "308", "timestamp": "2025-11-24T15:23:02"}
+{"text": "一次性塑料杯", "label": "308", "timestamp": "2025-11-24T15:23:03"}
+{"text": "透明小塑料杯", "label": "308", "timestamp": "2025-11-24T15:23:04"}
+{"text": "transparent plastic drink cup", "label": "308", "timestamp": "2025-11-24T15:23:05"}
+
+{"text": "wooden pencil", "label": "401", "timestamp": "2025-11-24T15:24:01"}
+{"text": "a yellow pencil", "label": "401", "timestamp": "2025-11-24T15:24:02"}
+{"text": "铅笔", "label": "401", "timestamp": "2025-11-24T15:24:03"}
+{"text": "用来写字的铅笔", "label": "401", "timestamp": "2025-11-24T15:24:04"}
+{"text": "sharp HB pencil", "label": "401", "timestamp": "2025-11-24T15:24:05"}
+
+{"text": "ballpoint pen", "label": "402", "timestamp": "2025-11-24T15:25:01"}
+{"text": "blue pen for writing", "label": "402", "timestamp": "2025-11-24T15:25:02"}
+{"text": "圆珠笔", "label": "402", "timestamp": "2025-11-24T15:25:03"}
+{"text": "写字用的笔 圆珠笔", "label": "402", "timestamp": "2025-11-24T15:25:04"}
+{"text": "click ballpoint pen", "label": "402", "timestamp": "2025-11-24T15:25:05"}
+
+{"text": "thick marker", "label": "403", "timestamp": "2025-11-24T15:26:01"}
+{"text": "black marker pen", "label": "403", "timestamp": "2025-11-24T15:26:02"}
+{"text": "记号笔", "label": "403", "timestamp": "2025-11-24T15:26:03"}
+{"text": "粗头的记号笔", "label": "403", "timestamp": "2025-11-24T15:26:04"}
+{"text": "permanent marker", "label": "403", "timestamp": "2025-11-24T15:26:05"}
+
+{"text": "white eraser", "label": "404", "timestamp": "2025-11-24T15:27:01"}
+{"text": "small rubber eraser", "label": "404", "timestamp": "2025-11-24T15:27:02"}
+{"text": "橡皮擦", "label": "404", "timestamp": "2025-11-24T15:27:03"}
+{"text": "用来擦字的橡皮", "label": "404", "timestamp": "2025-11-24T15:27:04"}
+{"text": "school eraser for pencil", "label": "404", "timestamp": "2025-11-24T15:27:05"}
+
+{"text": "15cm ruler", "label": "405", "timestamp": "2025-11-24T15:28:01"}
+{"text": "small plastic ruler", "label": "405", "timestamp": "2025-11-24T15:28:02"}
+{"text": "15厘米尺子", "label": "405", "timestamp": "2025-11-24T15:28:03"}
+{"text": "直尺 15cm", "label": "405", "timestamp": "2025-11-24T15:28:04"}
+{"text": "short measuring ruler", "label": "405", "timestamp": "2025-11-24T15:28:05"}
+
+{"text": "small notebook", "label": "406", "timestamp": "2025-11-24T15:29:01"}
+{"text": "a pocket notebook", "label": "406", "timestamp": "2025-11-24T15:29:02"}
+{"text": "小本子", "label": "406", "timestamp": "2025-11-24T15:29:03"}
+{"text": "用来记事的小本", "label": "406", "timestamp": "2025-11-24T15:29:04"}
+{"text": "spiral small notebook", "label": "406", "timestamp": "2025-11-24T15:29:05"}
+
+{"text": "sticky notes pad", "label": "407", "timestamp": "2025-11-24T15:30:01"}
+{"text": "yellow sticky notes", "label": "407", "timestamp": "2025-11-24T15:30:02"}
+{"text": "便利贴本", "label": "407", "timestamp": "2025-11-24T15:30:03"}
+{"text": "一小本便利贴", "label": "407", "timestamp": "2025-11-24T15:30:04"}
+{"text": "post it notes pad", "label": "407", "timestamp": "2025-11-24T15:30:05"}
+
+{"text": "office stapler", "label": "408", "timestamp": "2025-11-24T15:31:01"}
+{"text": "small stapler", "label": "408", "timestamp": "2025-11-24T15:31:02"}
+{"text": "订书机", "label": "408", "timestamp": "2025-11-24T15:31:03"}
+{"text": "用来装订纸的订书机", "label": "408", "timestamp": "2025-11-24T15:31:04"}
+{"text": "mini desk stapler", "label": "408", "timestamp": "2025-11-24T15:31:05"}
+
+{"text": "tape dispenser", "label": "409", "timestamp": "2025-11-24T15:32:01"}
+{"text": "small tape holder", "label": "409", "timestamp": "2025-11-24T15:32:02"}
+{"text": "胶带座", "label": "409", "timestamp": "2025-11-24T15:32:03"}
+{"text": "切透明胶的胶带座", "label": "409", "timestamp": "2025-11-24T15:32:04"}
+{"text": "desktop tape dispenser", "label": "409", "timestamp": "2025-11-24T15:32:05"}
+
+{"text": "glue stick", "label": "410", "timestamp": "2025-11-24T15:33:01"}
+{"text": "solid glue stick", "label": "410", "timestamp": "2025-11-24T15:33:02"}
+{"text": "固体胶棒", "label": "410", "timestamp": "2025-11-24T15:33:03"}
+{"text": "用来粘纸的胶棒", "label": "410", "timestamp": "2025-11-24T15:33:04"}
+{"text": "white school glue stick", "label": "410", "timestamp": "2025-11-24T15:33:05"}
+
+{"text": "small toy car", "label": "501", "timestamp": "2025-11-24T15:34:01"}
+{"text": "a blue toy car", "label": "501", "timestamp": "2025-11-24T15:34:02"}
+{"text": "小玩具车", "label": "501", "timestamp": "2025-11-24T15:34:03"}
+{"text": "小汽车 玩具", "label": "501", "timestamp": "2025-11-24T15:34:04"}
+{"text": "tiny car toy with wheels", "label": "501", "timestamp": "2025-11-24T15:34:05"}
+
+{"text": "toy block cube", "label": "502", "timestamp": "2025-11-24T15:35:01"}
+{"text": "a small building block", "label": "502", "timestamp": "2025-11-24T15:35:02"}
+{"text": "小积木方块", "label": "502", "timestamp": "2025-11-24T15:35:03"}
+{"text": "彩色积木块", "label": "502", "timestamp": "2025-11-24T15:35:04"}
+{"text": "plastic cube block", "label": "502", "timestamp": "2025-11-24T15:35:05"}
+
+{"text": "rubber ball", "label": "503", "timestamp": "2025-11-24T15:36:01"}
+{"text": "small bouncy ball", "label": "503", "timestamp": "2025-11-24T15:36:02"}
+{"text": "小皮球", "label": "503", "timestamp": "2025-11-24T15:36:03"}
+{"text": "可以弹跳的小球", "label": "503", "timestamp": "2025-11-24T15:36:04"}
+{"text": "colorful rubber toy ball", "label": "503", "timestamp": "2025-11-24T15:36:05"}
+
+{"text": "plush cube toy", "label": "504", "timestamp": "2025-11-24T15:37:01"}
+{"text": "soft plush cube", "label": "504", "timestamp": "2025-11-24T15:37:02"}
+{"text": "绒布方块", "label": "504", "timestamp": "2025-11-24T15:37:03"}
+{"text": "软软的布方块", "label": "504", "timestamp": "2025-11-24T15:37:04"}
+{"text": "soft fabric cube toy", "label": "504", "timestamp": "2025-11-24T15:37:05"}
+
+{"text": "toy house", "label": "505", "timestamp": "2025-11-24T15:38:01"}
+{"text": "small house model", "label": "505", "timestamp": "2025-11-24T15:38:02"}
+{"text": "小房子模型", "label": "505", "timestamp": "2025-11-24T15:38:03"}
+{"text": "玩具小房子", "label": "505", "timestamp": "2025-11-24T15:38:04"}
+{"text": "tiny toy house", "label": "505", "timestamp": "2025-11-24T15:38:05"}
+
+{"text": "toy airplane", "label": "506", "timestamp": "2025-11-24T15:39:01"}
+{"text": "small plane toy", "label": "506", "timestamp": "2025-11-24T15:39:02"}
+{"text": "小飞机模型", "label": "506", "timestamp": "2025-11-24T15:39:03"}
+{"text": "玩具飞机", "label": "506", "timestamp": "2025-11-24T15:39:04"}
+{"text": "blue toy airplane", "label": "506", "timestamp": "2025-11-24T15:39:05"}
+
+{"text": "toy boat", "label": "507", "timestamp": "2025-11-24T15:40:01"}
+{"text": "small boat toy", "label": "507", "timestamp": "2025-11-24T15:40:02"}
+{"text": "小船模型", "label": "507", "timestamp": "2025-11-24T15:40:03"}
+{"text": "玩具小船", "label": "507", "timestamp": "2025-11-24T15:40:04"}
+{"text": "toy sail boat", "label": "507", "timestamp": "2025-11-24T15:40:05"}
+
+{"text": "puzzle piece", "label": "508", "timestamp": "2025-11-24T15:41:01"}
+{"text": "small jigsaw piece", "label": "508", "timestamp": "2025-11-24T15:41:02"}
+{"text": "拼图碎片", "label": "508", "timestamp": "2025-11-24T15:41:03"}
+{"text": "一小块拼图", "label": "508", "timestamp": "2025-11-24T15:41:04"}
+{"text": "cardboard puzzle piece", "label": "508", "timestamp": "2025-11-24T15:41:05"}
+
+{"text": "bar of soap", "label": "601", "timestamp": "2025-11-24T15:42:01"}
+{"text": "small soap bar", "label": "601", "timestamp": "2025-11-24T15:42:02"}
+{"text": "香皂", "label": "601", "timestamp": "2025-11-24T15:42:03"}
+{"text": "一块香皂", "label": "601", "timestamp": "2025-11-24T15:42:04"}
+{"text": "white bath soap", "label": "601", "timestamp": "2025-11-24T15:42:05"}
+
+{"text": "kitchen sponge", "label": "602", "timestamp": "2025-11-24T15:43:01"}
+{"text": "yellow cleaning sponge", "label": "602", "timestamp": "2025-11-24T15:43:02"}
+{"text": "海绵", "label": "602", "timestamp": "2025-11-24T15:43:03"}
+{"text": "一块洗碗海绵", "label": "602", "timestamp": "2025-11-24T15:43:04"}
+{"text": "soft dish sponge", "label": "602", "timestamp": "2025-11-24T15:43:05"}
+
+{"text": "toothbrush", "label": "603", "timestamp": "2025-11-24T15:44:01"}
+{"text": "a small toothbrush", "label": "603", "timestamp": "2025-11-24T15:44:02"}
+{"text": "牙刷", "label": "603", "timestamp": "2025-11-24T15:44:03"}
+{"text": "用来刷牙的牙刷", "label": "603", "timestamp": "2025-11-24T15:44:04"}
+{"text": "blue plastic toothbrush", "label": "603", "timestamp": "2025-11-24T15:44:05"}
+
+{"text": "small towel", "label": "604", "timestamp": "2025-11-24T15:45:01"}
+{"text": "hand towel", "label": "604", "timestamp": "2025-11-24T15:45:02"}
+{"text": "小毛巾", "label": "604", "timestamp": "2025-11-24T15:45:03"}
+{"text": "擦手的小毛巾", "label": "604", "timestamp": "2025-11-24T15:45:04"}
+{"text": "soft face towel", "label": "604", "timestamp": "2025-11-24T15:45:05"}
+
+{"text": "TV remote", "label": "701", "timestamp": "2025-11-24T15:46:01"}
+{"text": "television remote control", "label": "701", "timestamp": "2025-11-24T15:46:02"}
+{"text": "遥控器", "label": "701", "timestamp": "2025-11-24T15:46:03"}
+{"text": "电视遥控器", "label": "701", "timestamp": "2025-11-24T15:46:04"}
+{"text": "black TV remote", "label": "701", "timestamp": "2025-11-24T15:46:05"}
+
+{"text": "smartphone", "label": "702", "timestamp": "2025-11-24T15:47:01"}
+{"text": "a small phone", "label": "702", "timestamp": "2025-11-24T15:47:02"}
+{"text": "手机", "label": "702", "timestamp": "2025-11-24T15:47:03"}
+{"text": "一部智能手机", "label": "702", "timestamp": "2025-11-24T15:47:04"}
+{"text": "touch screen smartphone", "label": "702", "timestamp": "2025-11-24T15:47:05"}
+
+{"text": "wireless mouse", "label": "703", "timestamp": "2025-11-24T15:48:01"}
+{"text": "computer mouse", "label": "703", "timestamp": "2025-11-24T15:48:02"}
+{"text": "无线鼠标", "label": "703", "timestamp": "2025-11-24T15:48:03"}
+{"text": "小鼠标", "label": "703", "timestamp": "2025-11-24T15:48:04"}
+{"text": "USB wireless mouse", "label": "703", "timestamp": "2025-11-24T15:48:05"}
+
+{"text": "small power bank", "label": "704", "timestamp": "2025-11-24T15:49:01"}
+{"text": "portable power bank", "label": "704", "timestamp": "2025-11-24T15:49:02"}
+{"text": "小充电宝", "label": "704", "timestamp": "2025-11-24T15:49:03"}
+{"text": "手掌大小的充电宝", "label": "704", "timestamp": "2025-11-24T15:49:04"}
+{"text": "white phone power bank", "label": "704", "timestamp": "2025-11-24T15:49:05"}
+
+{"text": "metal key", "label": "801", "timestamp": "2025-11-24T15:50:01"}
+{"text": "a small door key", "label": "801", "timestamp": "2025-11-24T15:50:02"}
+{"text": "钥匙", "label": "801", "timestamp": "2025-11-24T15:50:03"}
+{"text": "开门的钥匙", "label": "801", "timestamp": "2025-11-24T15:50:04"}
+{"text": "silver house key", "label": "801", "timestamp": "2025-11-24T15:50:05"}
+
+{"text": "keychain", "label": "802", "timestamp": "2025-11-24T15:51:01"}
+{"text": "small key ring", "label": "802", "timestamp": "2025-11-24T15:51:02"}
+{"text": "钥匙扣", "label": "802", "timestamp": "2025-11-24T15:51:03"}
+{"text": "挂在钥匙上的钥匙扣", "label": "802", "timestamp": "2025-11-24T15:51:04"}
+{"text": "cute keychain toy", "label": "802", "timestamp": "2025-11-24T15:51:05"}
+
+{"text": "leather wallet", "label": "803", "timestamp": "2025-11-24T15:52:01"}
+{"text": "small wallet", "label": "803", "timestamp": "2025-11-24T15:52:02"}
+{"text": "钱包", "label": "803", "timestamp": "2025-11-24T15:52:03"}
+{"text": "用来装钱的钱包", "label": "803", "timestamp": "2025-11-24T15:52:04"}
+{"text": "brown leather wallet", "label": "803", "timestamp": "2025-11-24T15:52:05"}
+
+{"text": "sunglasses", "label": "804", "timestamp": "2025-11-24T15:53:01"}
+{"text": "dark sunglasses", "label": "804", "timestamp": "2025-11-24T15:53:02"}
+{"text": "太阳镜", "label": "804", "timestamp": "2025-11-24T15:53:03"}
+{"text": "黑色太阳镜", "label": "804", "timestamp": "2025-11-24T15:53:04"}
+{"text": "cool black shades", "label": "804", "timestamp": "2025-11-24T15:53:05"}
+
+{"text": "deck of cards", "label": "805", "timestamp": "2025-11-24T15:54:01"}
+{"text": "poker cards deck", "label": "805", "timestamp": "2025-11-24T15:54:02"}
+{"text": "一副扑克牌", "label": "805", "timestamp": "2025-11-24T15:54:03"}
+{"text": "纸牌 一整副", "label": "805", "timestamp": "2025-11-24T15:54:04"}
+{"text": "pack of playing cards", "label": "805", "timestamp": "2025-11-24T15:54:05"}
+
+{"text": "single dice", "label": "806", "timestamp": "2025-11-24T15:55:01"}
+{"text": "small white dice", "label": "806", "timestamp": "2025-11-24T15:55:02"}
+{"text": "骰子", "label": "806", "timestamp": "2025-11-24T15:55:03"}
+{"text": "六面的色子", "label": "806", "timestamp": "2025-11-24T15:55:04"}
+{"text": "game dice cube", "label": "806", "timestamp": "2025-11-24T15:55:05"}
+
+{"text": "chess pawn", "label": "807", "timestamp": "2025-11-24T15:56:01"}
+{"text": "small chess piece", "label": "807", "timestamp": "2025-11-24T15:56:02"}
+{"text": "国际象棋棋子 兵", "label": "807", "timestamp": "2025-11-24T15:56:03"}
+{"text": "棋盘上的小棋子", "label": "807", "timestamp": "2025-11-24T15:56:04"}
+{"text": "white chess pawn", "label": "807", "timestamp": "2025-11-24T15:56:05"}
+
+{"text": "rubik cube", "label": "808", "timestamp": "2025-11-24T15:57:01"}
+{"text": "3x3 rubik's cube", "label": "808", "timestamp": "2025-11-24T15:57:02"}
+{"text": "魔方", "label": "808", "timestamp": "2025-11-24T15:57:03"}
+{"text": "彩色的三阶魔方", "label": "808", "timestamp": "2025-11-24T15:57:04"}
+{"text": "colorful puzzle cube", "label": "808", "timestamp": "2025-11-24T15:57:05"}
+
+{"text": "small gift box", "label": "809", "timestamp": "2025-11-24T15:58:01"}
+{"text": "tiny present box", "label": "809", "timestamp": "2025-11-24T15:58:02"}
+{"text": "小礼盒", "label": "809", "timestamp": "2025-11-24T15:58:03"}
+{"text": "系着蝴蝶结的小盒子", "label": "809", "timestamp": "2025-11-24T15:58:04"}
+{"text": "square gift box", "label": "809", "timestamp": "2025-11-24T15:58:05"}
+
+{"text": "small candle", "label": "810", "timestamp": "2025-11-24T15:59:01"}
+{"text": "white candle", "label": "810", "timestamp": "2025-11-24T15:59:02"}
+{"text": "小蜡烛", "label": "810", "timestamp": "2025-11-24T15:59:03"}
+{"text": "点燃的小蜡烛", "label": "810", "timestamp": "2025-11-24T15:59:04"}
+{"text": "short wax candle", "label": "810", "timestamp": "2025-11-24T15:59:05"}
+

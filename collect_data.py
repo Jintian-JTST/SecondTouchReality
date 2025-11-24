@@ -24,32 +24,31 @@ def append_example(text: str, label: str) -> None:
 
 
 def main():
-    print("=== 文本-物体 数据采集器 ===")
-    print(f"数据会被追加到文件: {DATA_PATH.resolve()}")
-    print("每条数据 = 一句描述 + 一个物体标签/编号")
-    print("输入空行 或 exit / quit 结束。\n")
+    print("=== Interactive Data Collection ===")
+    print(f"Data will be appended to file: {DATA_PATH.resolve()}")
+    print("Each entry = a description + an object label/ID")
+    print("Enter an empty line or 'exit' / 'quit' to finish.\n")
 
     while True:
         try:
-            text = input("描述 text> ").strip()
+            text = input("Description text> ").strip()
         except (EOFError, KeyboardInterrupt):
-            print("\n退出。")
+            print("\nExiting.")
             break
 
         if not text or text.lower() in {"exit", "quit"}:
-            print("结束采集。")
+            print("Exiting.")
             break
 
-        label = input("对应的物体标签/编号 label> ").strip()
+        label = input("Object label/ID> ").strip()
         if not label:
-            print("标签为空，跳过这一条。")
+            print("Label is empty, skipping this entry.")
             continue
 
         append_example(text, label)
-        print("✅ 已保存。")
+        print("✅ Saved.")
 
-    print("\n所有数据都已经写入数据库文件。")
-
+    print("\nAll data has been written to the database file.")
 
 if __name__ == "__main__":
     main()
