@@ -8,6 +8,207 @@
 {"text": "a long yellow banana", "label": "103"}
 {"text": "sweet yellow fruit banana", "label": "103"}
 {"text": "orange fruit", "label": "104"}
+
+{"text": "ripe red apple fruit", "label": "101"}
+{"text": "small red apple on the desk", "label": "101"}
+{"text": "juicy red apple with skin", "label": "101"}
+{"text": "round red apple in the basket", "label": "101"}
+{"text": "sour green apple from the tree", "label": "102"}
+{"text": "crisp green apple in the kitchen", "label": "102"}
+{"text": "small green apple fruit", "label": "102"}
+{"text": "fresh green apple with leaf", "label": "102"}
+{"text": "ripe yellow banana on the counter", "label": "103"}
+{"text": "long curved yellow banana", "label": "103"}
+{"text": "sweet banana fruit peeled", "label": "103"}
+{"text": "yellow banana with brown spots", "label": "103"}
+{"text": "juicy orange fruit on the table", "label": "104"}
+{"text": "round orange citrus fruit", "label": "104"}
+{"text": "sweet orange in my hand", "label": "104"}
+{"text": "fresh orange from the tree", "label": "104"}
+{"text": "sour yellow lemon on the counter", "label": "105"}
+{"text": "small yellow lemon fruit", "label": "105"}
+{"text": "juicy lemon with seeds", "label": "105"}
+{"text": "bright yellow lemon in the kitchen", "label": "105"}
+{"text": "sweet green pear on the table", "label": "106"}
+{"text": "juicy pear fruit with stem", "label": "106"}
+{"text": "small green pear in the bowl", "label": "106"}
+{"text": "ripe pear from the orchard", "label": "106"}
+{"text": "soft peach fruit on the plate", "label": "107"}
+{"text": "pink peach from the tree", "label": "107"}
+{"text": "juicy peach in my hand", "label": "107"}
+{"text": "sweet peach with fuzz", "label": "107"}
+{"text": "tiny red strawberry on the plant", "label": "108"}
+{"text": "sweet strawberry fruit", "label": "108"}
+{"text": "small strawberry in the field", "label": "108"}
+{"text": "red strawberry with seeds", "label": "108"}
+{"text": "bunch of purple grapes on the vine", "label": "109"}
+{"text": "sweet grapes fruit cluster", "label": "109"}
+{"text": "small grapes in a bowl", "label": "109"}
+{"text": "juicy grapes from the vineyard", "label": "109"}
+{"text": "fuzzy brown kiwi fruit", "label": "110"}
+{"text": "green kiwi on the plate", "label": "110"}
+{"text": "small kiwi with cut half", "label": "110"}
+{"text": "sweet kiwi fruit with black seeds", "label": "110"}
+{"text": "long orange carrot from the garden", "label": "201"}
+{"text": "crunchy carrot vegetable", "label": "201"}
+{"text": "fresh carrot with greens", "label": "201"}
+{"text": "orange carrot in the soil", "label": "201"}
+{"text": "green cucumber on the vine", "label": "202"}
+{"text": "long cucumber vegetable", "label": "202"}
+{"text": "fresh cucumber from the market", "label": "202"}
+{"text": "crisp cucumber in the salad", "label": "202"}
+{"text": "round red tomato on the plant", "label": "203"}
+{"text": "juicy tomato vegetable", "label": "203"}
+{"text": "small tomato in the kitchen", "label": "203"}
+{"text": "red tomato with stem", "label": "203"}
+{"text": "brown potato from the ground", "label": "204"}
+{"text": "small potato vegetable", "label": "204"}
+{"text": "raw potato with eyes", "label": "204"}
+{"text": "rough potato in the sack", "label": "204"}
+{"text": "green broccoli floret on the plate", "label": "205"}
+{"text": "fresh broccoli vegetable", "label": "205"}
+{"text": "small broccoli piece steamed", "label": "205"}
+{"text": "crunchy broccoli from the farm", "label": "205"}
+{"text": "yellow corn cob on the stalk", "label": "206"}
+{"text": "sweet corn vegetable", "label": "206"}
+{"text": "fresh corn cob boiled", "label": "206"}
+{"text": "large corn cob with kernels", "label": "206"}
+{"text": "white ceramic mug on the table", "label": "301"}
+{"text": "empty mug for coffee", "label": "301"}
+{"text": "clean ceramic mug with handle", "label": "301"}
+{"text": "small mug from the cupboard", "label": "301"}
+{"text": "round small bowl for soup", "label": "302"}
+{"text": "white bowl on the counter", "label": "302"}
+{"text": "clean bowl with rice", "label": "302"}
+{"text": "ceramic bowl from the kitchen", "label": "302"}
+{"text": "flat small plate for dinner", "label": "303"}
+{"text": "white plate on the table", "label": "303"}
+{"text": "clean plate with food", "label": "303"}
+{"text": "round plate from the set", "label": "303"}
+{"text": "metal spoon for eating", "label": "304"}
+{"text": "silver spoon in the drawer", "label": "304"}
+{"text": "clean spoon from the dishwasher", "label": "304"}
+{"text": "small spoon for dessert", "label": "304"}
+{"text": "metal fork for pasta", "label": "305"}
+{"text": "silver fork on the table", "label": "305"}
+{"text": "clean fork from the set", "label": "305"}
+{"text": "small plastic fork for picnic", "label": "306"}
+{"text": "dull butter knife on the plate", "label": "306"}
+{"text": "metal knife for spreading", "label": "306"}
+{"text": "wooden chopsticks for eating", "label": "307"}
+{"text": "pair of chopsticks in the case", "label": "307"}
+{"text": "clean chopsticks from Asia", "label": "307"}
+{"text": "transparent plastic cup for drink", "label": "308"}
+{"text": "light plastic cup on the desk", "label": "308"}
+{"text": "disposable cup for party", "label": "308"}
+{"text": "wooden pencil with eraser", "label": "401"}
+{"text": "yellow pencil for writing", "label": "401"}
+{"text": "sharp pencil on the paper", "label": "401"}
+{"text": "blue ballpoint pen for notes", "label": "402"}
+{"text": "click pen from the office", "label": "402"}
+{"text": "smooth pen for journaling", "label": "402"}
+{"text": "black marker for drawing", "label": "403"}
+{"text": "permanent marker on the desk", "label": "403"}
+{"text": "thick marker for posters", "label": "403"}
+{"text": "white eraser for mistakes", "label": "404"}
+{"text": "small eraser on the pencil", "label": "404"}
+{"text": "rubber eraser from the store", "label": "404"}
+{"text": "plastic ruler for measuring", "label": "405"}
+{"text": "15cm ruler on the notebook", "label": "405"}
+{"text": "clear ruler from school", "label": "405"}
+{"text": "small notebook for ideas", "label": "406"}
+{"text": "pocket notebook in the bag", "label": "406"}
+{"text": "spiral notebook with pages", "label": "406"}
+{"text": "yellow sticky notes for reminders", "label": "407"}
+{"text": "pad of notes on the monitor", "label": "407"}
+{"text": "small sticky notes from the pack", "label": "407"}
+{"text": "office stapler for papers", "label": "408"}
+{"text": "desk stapler with staples", "label": "408"}
+{"text": "small stapler from the drawer", "label": "408"}
+{"text": "tape dispenser on the desk", "label": "409"}
+{"text": "desktop tape holder", "label": "409"}
+{"text": "small dispenser with tape", "label": "409"}
+{"text": "solid glue stick for crafts", "label": "410"}
+{"text": "white glue stick from the art set", "label": "410"}
+{"text": "school glue stick for paper", "label": "410"}
+{"text": "blue toy car with wheels", "label": "501"}
+{"text": "small car toy on the floor", "label": "501"}
+{"text": "fast toy car from the set", "label": "501"}
+{"text": "toy block cube for building", "label": "502"}
+{"text": "colorful cube on the table", "label": "502"}
+{"text": "plastic block from the toy box", "label": "502"}
+{"text": "bouncy rubber ball on the ground", "label": "503"}
+{"text": "colorful ball for playing", "label": "503"}
+{"text": "small ball from the store", "label": "503"}
+{"text": "soft plush cube toy for kids", "label": "504"}
+{"text": "fabric cube on the shelf", "label": "504"}
+{"text": "cute plush toy from the nursery", "label": "504"}
+{"text": "toy house with windows", "label": "505"}
+{"text": "small house model on the table", "label": "505"}
+{"text": "plastic toy house for dolls", "label": "505"}
+{"text": "toy airplane with wings", "label": "506"}
+{"text": "small plane toy in the air", "label": "506"}
+{"text": "blue airplane from the set", "label": "506"}
+{"text": "toy boat on the water", "label": "507"}
+{"text": "small sailboat toy", "label": "507"}
+{"text": "plastic boat from the bath", "label": "507"}
+{"text": "puzzle piece from the game", "label": "508"}
+{"text": "small jigsaw piece on the table", "label": "508"}
+{"text": "cardboard piece with image", "label": "508"}
+{"text": "white bar of soap in the bathroom", "label": "601"}
+{"text": "scented soap for washing", "label": "601"}
+{"text": "small soap bar from the shelf", "label": "601"}
+{"text": "yellow sponge for dishes", "label": "602"}
+{"text": "soft sponge in the sink", "label": "602"}
+{"text": "cleaning sponge from the kitchen", "label": "602"}
+{"text": "small toothbrush with bristles", "label": "603"}
+{"text": "blue toothbrush in the holder", "label": "603"}
+{"text": "electric toothbrush for cleaning", "label": "603"}
+{"text": "soft small towel for hands", "label": "604"}
+{"text": "clean towel on the rack", "label": "604"}
+{"text": "cotton towel from the bathroom", "label": "604"}
+{"text": "black TV remote on the couch", "label": "701"}
+{"text": "remote control for television", "label": "701"}
+{"text": "small remote with buttons", "label": "701"}
+{"text": "smartphone with touch screen", "label": "702"}
+{"text": "small phone in the pocket", "label": "702"}
+{"text": "electronic device for communication", "label": "702"}
+{"text": "wireless mouse for computer", "label": "703"}
+{"text": "optical mouse on the pad", "label": "703"}
+{"text": "USB mouse from the office", "label": "703"}
+{"text": "portable power bank for charging", "label": "704"}
+{"text": "small power bank in the bag", "label": "704"}
+{"text": "white battery pack for phone", "label": "704"}
+{"text": "metal key for the door", "label": "801"}
+{"text": "small key on the ring", "label": "801"}
+{"text": "silver key from the lock", "label": "801"}
+{"text": "keychain with charm", "label": "802"}
+{"text": "small key ring for keys", "label": "802"}
+{"text": "cute keychain from the gift shop", "label": "802"}
+{"text": "leather wallet for money", "label": "803"}
+{"text": "small wallet in the pocket", "label": "803"}
+{"text": "brown wallet with cards", "label": "803"}
+{"text": "dark sunglasses for sun", "label": "804"}
+{"text": "cool shades on the face", "label": "804"}
+{"text": "UV protection sunglasses", "label": "804"}
+{"text": "deck of cards for games", "label": "805"}
+{"text": "poker cards on the table", "label": "805"}
+{"text": "pack of cards from the box", "label": "805"}
+{"text": "small dice for rolling", "label": "806"}
+{"text": "white dice with dots", "label": "806"}
+{"text": "game dice from the set", "label": "806"}
+{"text": "chess pawn on the board", "label": "807"}
+{"text": "small chess piece for game", "label": "807"}
+{"text": "white pawn from the chess set", "label": "807"}
+{"text": "colorful rubik cube puzzle", "label": "808"}
+{"text": "3x3 cube for solving", "label": "808"}
+{"text": "puzzle cube from the shelf", "label": "808"}
+{"text": "small gift box with ribbon", "label": "809"}
+{"text": "tiny box for present", "label": "809"}
+{"text": "wrapped gift box on the table", "label": "809"}
+{"text": "white candle for light", "label": "810"}
+{"text": "small candle on the holder", "label": "810"}
+{"text": "wax candle from the store", "label": "810"}
 {"text": "a round orange", "label": "104"}
 {"text": "sweet citrus orange", "label": "104"}
 {"text": "yellow lemon", "label": "105"}
