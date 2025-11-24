@@ -1,0 +1,61 @@
+id,english,category
+101,red apple,fruit
+102,green apple,fruit
+103,banana,fruit
+104,orange,fruit
+105,lemon,fruit
+106,pear,fruit
+107,peach,fruit
+108,strawberry,fruit
+109,bunch of grapes,fruit
+110,kiwi,fruit
+201,carrot,vegetable
+202,cucumber,vegetable
+203,tomato,vegetable
+204,potato,vegetable
+205,broccoli floret,vegetable
+206,corn cob,vegetable
+301,ceramic mug,kitchenware
+302,small bowl,kitchenware
+303,small plate,kitchenware
+304,spoon,kitchenware
+305,fork,kitchenware
+306,butter knife,kitchenware
+307,chopsticks pair,kitchenware
+308,plastic cup,kitchenware
+401,pencil,stationery
+402,ballpoint pen,stationery
+403,marker,stationery
+404,eraser,stationery
+405,15cm ruler,stationery
+406,small notebook,stationery
+407,sticky notes pad,stationery
+408,stapler,stationery
+409,tape dispenser,stationery
+410,glue stick,stationery
+501,toy car,toy
+502,toy block cube,toy
+503,rubber ball,toy
+504,plush cube,toy
+505,toy house,toy
+506,toy airplane,toy
+507,toy boat,toy
+508,puzzle piece,toy
+601,bar of soap,bathroom
+602,sponge,bathroom
+603,toothbrush,bathroom
+604,small towel,bathroom
+701,TV remote,electronics
+702,smartphone,electronics
+703,wireless mouse,electronics
+704,small power bank,electronics
+801,key,everyday
+802,keychain,everyday
+803,wallet,everyday
+804,sunglasses,everyday
+805,deck of cards,everyday
+806,dice,everyday
+807,chess pawn,everyday
+808,rubik cube,everyday
+809,small gift box,everyday
+810,candle,everyday
