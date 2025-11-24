@@ -14,13 +14,17 @@ from sklearn.feature_extraction.text import HashingVectorizer
 
 MODEL_PATH = Path("text_model.pkl")
 
-
 def init_vectorizer(n_features: int) -> HashingVectorizer:
+    # 使用字符 n-gram（char 或 char_wb），ngram_range 可调
+    # char_wb 会在单词边界内部构造 n-grams，更关注词内部片段
     return HashingVectorizer(
         n_features=n_features,
         alternate_sign=False,
         norm="l2",
+        analyzer="char_wb",        # 或 "char"
+        ngram_range=(3, 6),        # 3-6 长度的字符片段；按语言/任务调整
     )
+
 
 
 def load_model():

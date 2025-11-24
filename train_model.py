@@ -48,12 +48,22 @@ def load_dataset() -> Tuple[List[str], List[str]]:
     return texts, labels
 
 
+# 替换前（你现在的样子）见你的文件。:contentReference[oaicite:2]{index=2}
+
+# 替换为下面这个 init_vectorizer
+from sklearn.feature_extraction.text import HashingVectorizer
+
 def init_vectorizer() -> HashingVectorizer:
+    # 使用字符 n-gram（char 或 char_wb），ngram_range 可调
+    # char_wb 会在单词边界内部构造 n-grams，更关注词内部片段
     return HashingVectorizer(
         n_features=N_FEATURES,
         alternate_sign=False,
         norm="l2",
+        analyzer="char_wb",        # 或 "char"
+        ngram_range=(3, 6),        # 3-6 长度的字符片段；按语言/任务调整
     )
+
 
 
 def train():
