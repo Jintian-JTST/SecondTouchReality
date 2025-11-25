@@ -62,20 +62,25 @@ public class TextQueryClient_TMP : MonoBehaviour
 
     public void OpenDialog()
     {
+        Debug.Log("OpenDialog() 被调用了！！！");
+
         if (dialogPanel == null)
         {
-            Debug.LogWarning("dialogPanel 未绑定");
+            Debug.LogWarning("dialogPanel 未绑定！");
             return;
         }
+
         dialogPanel.SetActive(true);
+
         if (descriptionInput != null)
         {
             descriptionInput.text = "";
             descriptionInput.ActivateInputField();
             descriptionInput.Select();
         }
-        Debug.Log("Dialog opened.");
     }
+
+
 
     public void CloseDialog()
     {
