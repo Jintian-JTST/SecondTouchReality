@@ -38,7 +38,10 @@ class TextInferHandler(socketserver.StreamRequestHandler):
                 prob = top["prob"]
 
                 # 协议：返回 "label|prob\n"
-                resp = f"{label}|{prob:.3f}\n"
+                resp = f"{label}"
+                print(f"[SERVER] Query: {query!r}")
+                print(f"[SERVER] Response: {resp!r}", flush=True)
+
             except Exception as e:
                 print("Error during inference:", e)
                 resp = "ERROR|0.0\n"
