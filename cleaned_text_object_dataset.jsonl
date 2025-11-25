@@ -63,6 +63,193 @@
 {"text": "red tomato with stem", "label": "203"}
 {"text": "brown potato from the ground", "label": "204"}
 {"text": "small potato vegetable", "label": "204"}
+{"text": "big red apple sitting on plate", "label": "101"}
+{"text": "shiny red apple ready to eat", "label": "101"}
+{"text": "fresh red aplpe for kids snack", "label": "101"}
+{"text": "green apple on kitchen table", "label": "102"}
+{"text": "tart green apple with smooth skin", "label": "102"}
+{"text": "small sour green aple in basket", "label": "102"}
+{"text": "yellow banana lying on white plate", "label": "103"}
+{"text": "curved ripe banana fruit for breakfast", "label": "103"}
+{"text": "soft sweet bananna in lunchbox", "label": "103"}
+{"text": "bright orange on wooden table", "label": "104"}
+{"text": "peeled orange fruit with segments", "label": "104"}
+{"text": "sweet round oraneg for juice", "label": "104"}
+{"text": "small lemon on cutting board", "label": "105"}
+{"text": "half yellow lemon showing juicy pulp", "label": "105"}
+{"text": "tiny sour leemon near the sink", "label": "105"}
+{"text": "green pear lying on napkin", "label": "106"}
+{"text": "round pear fruit with light green skin", "label": "106"}
+{"text": "sweet juicy peaar on wooden surface", "label": "106"}
+{"text": "soft peach with orange pink skin", "label": "107"}
+{"text": "round peach fruit on kitchen counter", "label": "107"}
+{"text": "juicy pech with fuzzy peel", "label": "107"}
+{"text": "strawberry with green leaves on top", "label": "108"}
+{"text": "pile of small red strawberies", "label": "108"}
+{"text": "single bright red strawberry closeup", "label": "108"}
+{"text": "bunch of grapes in childs hand", "label": "109"}
+{"text": "small round grape fruits in cluster", "label": "109"}
+{"text": "loose purple graps in glass bowl", "label": "109"}
+{"text": "whole kiwi fruit with rough brown skin", "label": "110"}
+{"text": "sliced kiwi showing green center", "label": "110"}
+{"text": "small kiwwi lying next to knife", "label": "110"}
+
+{"text": "long carrot on chopping board", "label": "201"}
+{"text": "bright orange carrot next to knife", "label": "201"}
+{"text": "fresh washed carott from fridge", "label": "201"}
+{"text": "straight cucumber on white plate", "label": "202"}
+{"text": "dark green cucmber for salad", "label": "202"}
+{"text": "half sliced cucumber showing seeds", "label": "202"}
+{"text": "round tomato on cutting mat", "label": "203"}
+{"text": "red juicy tommato near the sink", "label": "203"}
+{"text": "small cherry tomato on table", "label": "203"}
+{"text": "dirty potato just dug from soil", "label": "204"}
+{"text": "brown potaato on wooden table", "label": "204"}
+{"text": "round potato with a few sprouts", "label": "204"}
+{"text": "large broccoli head with green florets", "label": "205"}
+{"text": "small piece of steamed brocoli", "label": "205"}
+{"text": "fresh broccoli stalk on plate", "label": "205"}
+{"text": "corn cob with bright yellow kernels", "label": "206"}
+{"text": "half eaten corn on white dish", "label": "206"}
+{"text": "raw corn with green husk partly open", "label": "206"}
+
+{"text": "white ceramic coffee mug near laptop", "label": "301"}
+{"text": "empty mug with round handle", "label": "301"}
+{"text": "small coffe mug sitting on coaster", "label": "301"}
+{"text": "shallow soup bowl on wooden table", "label": "302"}
+{"text": "clean cereal bowl with round rim", "label": "302"}
+{"text": "tiny white bowll beside spoon", "label": "302"}
+{"text": "large dinner plate with no food", "label": "303"}
+{"text": "round flat platte stacked on others", "label": "303"}
+{"text": "simple white plate used for lunch", "label": "303"}
+{"text": "metal spoon resting in bowl", "label": "304"}
+{"text": "shiny teaspoon on table cloth", "label": "304"}
+{"text": "small metalen spoon next to mug", "label": "304"}
+{"text": "table fork with four prongs", "label": "305"}
+{"text": "silver fork lying beside plate", "label": "305"}
+{"text": "short picnic fork made of metal", "label": "305"}
+{"text": "butter knife with rounded tip", "label": "306"}
+{"text": "small table knive next to fork", "label": "306"}
+{"text": "metal spreader knife on plate", "label": "306"}
+{"text": "pair of chopstiks on napkin", "label": "307"}
+{"text": "wooden chopsticks resting on holder", "label": "307"}
+{"text": "smooth brown chopsticks for rice", "label": "307"}
+{"text": "plastic cup half filled with water", "label": "308"}
+{"text": "transparent drinking cup on tray", "label": "308"}
+{"text": "small disposible cup near sink", "label": "308"}
+
+{"text": "pencil with sharpened graphite tip", "label": "401"}
+{"text": "short yellow pencel lying on notebook", "label": "401"}
+{"text": "wooden writing pencil with pink eraser", "label": "401"}
+{"text": "blue ink pen with plastic cap", "label": "402"}
+{"text": "ballpoint pen resting on table", "label": "402"}
+{"text": "simple office pen with clip", "label": "402"}
+{"text": "black felt marker with thick tip", "label": "403"}
+{"text": "open marker pen next to sketch", "label": "403"}
+{"text": "dark permanent markerr on desk", "label": "403"}
+{"text": "white block eraser on textbook", "label": "404"}
+{"text": "small ruber eraser beside pencil", "label": "404"}
+{"text": "rectangular eraser used for homework", "label": "404"}
+{"text": "transparent plastic ruller on paper", "label": "405"}
+{"text": "straight ruler with centimeter marks", "label": "405"}
+{"text": "short clear measuring rule on desk", "label": "405"}
+{"text": "small lined notebook for school notes", "label": "406"}
+{"text": "spiral note book lying open", "label": "406"}
+{"text": "pocket sized notebuk with elastic band", "label": "406"}
+{"text": "square sticky notes stuck to wall", "label": "407"}
+{"text": "yellow note pad with curled corner", "label": "407"}
+{"text": "tiny stickey note attached to screen", "label": "407"}
+{"text": "black office stapler holding papers", "label": "408"}
+{"text": "small hand stapler on work desk", "label": "408"}
+{"text": "open stapler showing metal staples", "label": "408"}
+{"text": "desk tape dispenser with clear roll", "label": "409"}
+{"text": "small plastc tape holder near scissors", "label": "409"}
+{"text": "heavy tape base on office table", "label": "409"}
+{"text": "purple glue stick with cap removed", "label": "410"}
+{"text": "small school glue stik on art table", "label": "410"}
+{"text": "solid glue bar used for paper crafts", "label": "410"}
+
+{"text": "tiny blue toy car on carpet", "label": "501"}
+{"text": "plastic race car with black wheels", "label": "501"}
+{"text": "childrens toy car facing camera", "label": "501"}
+{"text": "stacked plastic building cube", "label": "502"}
+{"text": "single toy block in bright color", "label": "502"}
+{"text": "small cubee toy on wooden floor", "label": "502"}
+{"text": "soft rubber ball in kids room", "label": "503"}
+{"text": "round play ball with bright colors", "label": "503"}
+{"text": "tiny bouncy bal on table", "label": "503"}
+{"text": "square plush cube with smiley face", "label": "504"}
+{"text": "soft cushion like cube toy", "label": "504"}
+{"text": "fabric toy block in nursery", "label": "504"}
+{"text": "miniature toy house with red roof", "label": "505"}
+{"text": "plastic doll house front view", "label": "505"}
+{"text": "tiny house toy on shelf", "label": "505"}
+{"text": "small toy airplane on desk", "label": "506"}
+{"text": "plastic aeroplane with short wings", "label": "506"}
+{"text": "blue toy jet pointing forward", "label": "506"}
+{"text": "yellow toy boat floating in tub", "label": "507"}
+{"text": "small plastic ship on floor", "label": "507"}
+{"text": "tiny boat toy placed on table", "label": "507"}
+{"text": "single puzzle peice on carpet", "label": "508"}
+{"text": "irregular shaped jigsaw piece", "label": "508"}
+{"text": "card puzzle part with printed color", "label": "508"}
+
+{"text": "rectangular bar of soap near sink", "label": "601"}
+{"text": "white sope sitting in soap dish", "label": "601"}
+{"text": "small bathroom soap with smooth edges", "label": "601"}
+{"text": "wet kitchen sponge next to faucet", "label": "602"}
+{"text": "yellow cleaning spunge in hand", "label": "602"}
+{"text": "rectangular dish sponge with green side", "label": "602"}
+{"text": "toothbrush lying across cup", "label": "603"}
+{"text": "blue handled tooth brush on sink", "label": "603"}
+{"text": "small manual toothbrush with soft bristles", "label": "603"}
+{"text": "folded hand towel on counter", "label": "604"}
+{"text": "white cotton towl hanging on hook", "label": "604"}
+{"text": "small bathroom towel near basin", "label": "604"}
+
+{"text": "tv remote lying between couch cushions", "label": "701"}
+{"text": "black remote control with many buttons", "label": "701"}
+{"text": "small televsion controller on armrest", "label": "701"}
+{"text": "black smartphone on wooden desk", "label": "702"}
+{"text": "modern touch phone with dark screen", "label": "702"}
+{"text": "small smart phone held in hand", "label": "702"}
+{"text": "wireless computer mouse beside keyboard", "label": "703"}
+{"text": "curved optical mous on mousepad", "label": "703"}
+{"text": "small usb mouse with scroll wheel", "label": "703"}
+{"text": "compact power bank with usb port", "label": "704"}
+{"text": "rectangular portable charger on table", "label": "704"}
+{"text": "white powerbank wired to phone", "label": "704"}
+
+{"text": "single metal door key on table", "label": "801"}
+{"text": "silver house key with teeth pattern", "label": "801"}
+{"text": "small key attached to lanyard", "label": "801"}
+{"text": "round keychain with small charm", "label": "802"}
+{"text": "metal key ring holding keychain", "label": "802"}
+{"text": "cute cartoon key chain toy", "label": "802"}
+{"text": "brown leather walet on desk", "label": "803"}
+{"text": "folded wallet with bank cards inside", "label": "803"}
+{"text": "small money wallet next to phone", "label": "803"}
+{"text": "dark sunglasses resting on table", "label": "804"}
+{"text": "pair of sun glasses with black frame", "label": "804"}
+{"text": "folded shades placed on book", "label": "804"}
+{"text": "deck of playing cards in box", "label": "805"}
+{"text": "spread poker cards on surface", "label": "805"}
+{"text": "stack of game cards on mat", "label": "805"}
+{"text": "single gaming dice on wooden table", "label": "806"}
+{"text": "white cube die showing three dots", "label": "806"}
+{"text": "small diice near playing pieces", "label": "806"}
+{"text": "plastic chess pawn on checkered board", "label": "807"}
+{"text": "white pawn standing alone", "label": "807"}
+{"text": "small game piece shaped like pawn", "label": "807"}
+{"text": "scrambled rubiks cube on table", "label": "808"}
+{"text": "color cube puzzle with mixed faces", "label": "808"}
+{"text": "3x3 rubik cub toy near laptop", "label": "808"}
+{"text": "tiny gift box with shiny wrapping", "label": "809"}
+{"text": "square present box tied with ribbon", "label": "809"}
+{"text": "small decorative giftbx on shelf", "label": "809"}
+{"text": "short white candle on metal holder", "label": "810"}
+{"text": "unlit wax candle standing upright", "label": "810"}
+{"text": "small canddle with blackened wick", "label": "810"}
 {"text": "raw potato with eyes", "label": "204"}
 {"text": "rough potato in the sack", "label": "204"}
 {"text": "green broccoli floret on the plate", "label": "205"}
