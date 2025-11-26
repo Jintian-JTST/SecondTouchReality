@@ -3,7 +3,6 @@
 #   Unity 发送一行文本（描述） -> 服务器返回 "label|prob\n"
 
 import socketserver
-import threading
 from run_model import load_model, infer_once  # 用你现成的代码 
 
 HOST = "127.0.0.1"

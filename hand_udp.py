@@ -30,16 +30,7 @@ import time
 from collections import defaultdict
 
 # ======== 从 hand_easy 复用深度逻辑 ========
-from hand_easy import (
-    CalibState,
-    RuntimeState,
-    compute_palm_width_and_length,
-    compute_curl,
-    compute_side,
-    compute_face_sign,
-    fuse_depth,
-    clamp,
-)
+from hand_easy import (CalibState,RuntimeState,compute_palm_width_and_length,compute_curl,compute_side,compute_face_sign,fuse_depth,clamp)
 
 # ======== 配置 ========
 WIN_NAME = "Hand UDP Vectors (Multi-hand + Pinch)"
