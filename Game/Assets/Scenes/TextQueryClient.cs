@@ -18,7 +18,10 @@ public class TextQueryClient_TMP : MonoBehaviour
     public Button openDialogButton;       
     public Button sendButton;             
     public TMP_Text resultText;
-    public GameObject successPanel;       
+    public GameObject successPanel;     
+
+    [Header("Model Library")]
+    public ModelLibrary modelLibrary;   // 新增：模型管理器
 
     private TcpClient client;
     private NetworkStream stream;
@@ -158,6 +161,21 @@ public class TextQueryClient_TMP : MonoBehaviour
         string resp = Encoding.UTF8.GetString(buffer, 0, n).Trim();
         Debug.Log("Server resp: " + resp);
 
+        // === 新增：根据返回的编号调出模型 ===
+        if (modelLibrary != null)
+        {
+            var go = modelLibrary.ShowModelByLabel(resp);
+            if (go == null)
+            {
+                Debug.LogWarning($"TextQueryClient_TMP: ModelLibrary 里没有找到名为 {resp} 的模型。");
+            }
+        }
+        else
+        {
+            Debug.LogWarning("TextQueryClient_TMP: modelLibrary 未设置，无法实例化模型。");
+        }
+        // ===================================
+
         if (resultText != null)
             resultText.text = $"预测模型: {resp}";
 
@@ -168,6 +186,7 @@ public class TextQueryClient_TMP : MonoBehaviour
         }
 
         CloseDialog();
+
     }
 
     private IEnumerator HideAfter(GameObject go, float seconds)
