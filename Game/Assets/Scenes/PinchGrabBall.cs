@@ -4,23 +4,23 @@ public class PinchGrabBall : MonoBehaviour
 {
     [Header("Hand Source")]
     public HandFromVectors handTracker; 
-    [Header("抓取设置")]
+    [Header("Grab Settings")]
     public int controlJointIndex = 8;   
     public float grabDistance = 0.10f;  
-    [Header("物理设置")]
+    [Header("Physics Settings")]
     public bool usePhysics = false;      
 
-    [Header("跟随设置")]
+    [Header("Follow Settings")]
     public int followJointIndex = 0;     
 
     [Range(0f, 1f)]
     public float followSmoothing = 0.15f; 
 
-    [Header("Pinch 容错")]
+    [Header("Pinch Release Grace")]
     public float pinchReleaseGrace = 0.3f;  
     private float pinchOffTimer = 0f;       
 
-    [Header("调试")]
+    [Header("Debug")]
     public bool isGrabbed = false;           
     public int grabbedHandIndex = -1;       
 
@@ -28,9 +28,11 @@ public class PinchGrabBall : MonoBehaviour
     private Vector3 grabOffset;            
 
     private static int grabbedCount = 0;    
-    public static bool AnyObjectGrabbed    
+    public static bool AnyObjectGrabbed   
+    {
         get { return grabbedCount > 0; }
     }
+
 
     private bool registeredGrab = false;
 
