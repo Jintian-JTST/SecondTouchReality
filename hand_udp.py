@@ -171,17 +171,14 @@ def main():
 
                 # ===== 处理每一只手 =====
                 if res.multi_hand_landmarks:
-                    for hi, hand_lms in enumerate(res.multi_hand_landmarks):
+                    for hi, (hand_lms, handed) in enumerate(zip(res.multi_hand_landmarks, res.multi_handedness)):
                         lms = hand_lms.landmark
 
-                        # 可视化
-                        mp_drawing.draw_landmarks(
-                            frame,
-                            hand_lms,
-                            mp_hands.HAND_CONNECTIONS,
-                            mp_styles.get_default_hand_landmarks_style(),
-                            mp_styles.get_default_hand_connections_style(),
-                        )
+                        # 1) MediaPipe 给的左右手标签
+                        handed_cls = handed.classification[0]
+                        label = handed_cls.label   # "Left" 或 "Right"
+                        score = float(handed_cls.score)
+                        is_left = (label == "Left")
 
                         # ------------- 1) 掌根位置 + 深度 -------------
                         wrist_lm = lms[0]
@@ -255,6 +252,9 @@ def main():
                         hand_dict = {
                             "hand_index": int(hi),
                             "pinch": bool(is_pinch),
+                            "is_left": bool(is_left),
+                            "hand_label": label,
+                            "hand_score": score,
                             "wrist": {
                                 "pixel": {"x": wrist_px, "y": wrist_py},
                                 "normalized": {

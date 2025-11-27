@@ -58,7 +58,10 @@ public class PinchGrabBall : MonoBehaviour
             int maxHands = handTracker.MaxHandCount;
             for (int h = 0; h < maxHands; h++)
             {
-                // pinch 状态完全从 Python/HandFromVectors 来
+                // 只让右手有资格抓
+                if (!handTracker.IsRightHand(h))
+                    continue;
+
                 if (!handTracker.IsHandPinching(h))
                     continue;
 

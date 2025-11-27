@@ -55,6 +55,8 @@ public class HandFromVectors : MonoBehaviour
     public class HandData
     {
         public int hand_index;
+        public bool is_left;     // Python 传来的左右手标记
+        public string hand_label; // 可选，用来 debug ("Left"/"Right")
         public bool pinch;
         public WristData wrist;
         public BoneData[] bones;
@@ -114,6 +116,8 @@ public class HandFromVectors : MonoBehaviour
     // 给外部脚本用的当前状态
     private bool[] hasHand = new bool[MaxHands];   // 当前这一帧，这个 handIndex 上有没有手
     private bool[] currentPinch = new bool[MaxHands]; // 当前这一帧，这只手有没有 pinch
+    private bool[] isLeftHand = new bool[MaxHands]; // True = 左手, False = 右手（或未知）
+
 
     // 最新一帧收到的所有手
     private HandData[] latestHands;
@@ -308,6 +312,8 @@ public class HandFromVectors : MonoBehaviour
         {
             hasHand[i] = false;
             currentPinch[i] = false;
+            isLeftHand[i] = false;
+
         }
 
         if (handsCopy == null || targetCamera == null)
@@ -344,8 +350,9 @@ public class HandFromVectors : MonoBehaviour
             HandData hand = handsCopy[h];
             if (hand == null || hand.wrist == null)
             {
-                hasHand[h] = false;
-                currentPinch[h] = false;
+                hasHand[h] = true;
+                currentPinch[h] = hand.pinch;
+                isLeftHand[h] = hand.is_left;
                 continue;
             }
 
@@ -482,6 +489,27 @@ public class HandFromVectors : MonoBehaviour
         position = jointPositions[handIndex, jointIndex];
         return true;
     }
+
+
+
+
+
+    // handIndex 是否是左手
+    public bool IsLeftHand(int handIndex)
+    {
+        if (handIndex < 0 || handIndex >= MaxHands) return false;
+        return hasHand[handIndex] && isLeftHand[handIndex];
+    }
+
+    // handIndex 是否是右手
+    public bool IsRightHand(int handIndex)
+    {
+        if (handIndex < 0 || handIndex >= MaxHands) return false;
+        // 只要不是左手，就当右手用（方便处理 Python 还没传 is_left 时的情况）
+        return hasHand[handIndex] && !isLeftHand[handIndex];
+    }
+
+
 
     // 让外部脚本知道支持的最大手数
     public int MaxHandCount
