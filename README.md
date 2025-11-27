@@ -1,10 +1,4 @@
-下面先给你一版新的 README markdown，然后在后半部分给你一个 1–2 分钟的英文口播稿，可以直接拿去讲。
 
----
-
-## 📄 建议版 README.md（Markdown）
-
-````markdown
 # SecondTouchReality (WIP)
 
 SecondTouchReality 是一个“小型全链路系统”，把 **Python 手部追踪 + 深度估计 + 文本分类模型** 和 **Unity 里的 3D 手、抓取交互与教学场景** 串成一条流水线。后面会预留一个 **硬件接口**（手套 / Arduino 等）来做真实世界的反馈。
