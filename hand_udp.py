@@ -1,5 +1,3 @@
-# -*- coding: utf-8 -*-
-# hand_two_hands_z_udp.py  （原 hand_udp_vectors.py 改名也行）
 """
 目标：
   1) 支持多只手（MediaPipe 里 max_num_hands 控制，上限 2 或更多都行）；
@@ -29,26 +27,19 @@ import json
 import time
 from collections import defaultdict
 
-# ======== 从 hand_easy 复用深度逻辑 ========
 from hand_easy import (CalibState,RuntimeState,compute_palm_width_and_length,compute_curl,compute_side,compute_face_sign,fuse_depth,clamp)
 
-# ======== 配置 ========
 WIN_NAME = "Hand UDP Vectors (Multi-hand + Pinch)"
 
 UDP_IP = "127.0.0.1"
 UDP_PORT = 5065
-
 EMA_ALPHA = 0.6
-
-# 捏合阈值：拇指尖-食指尖距离 / 掌宽 < 这个值 就认为在 pinch
 PINCH_RATIO_THRESH = 0.35
 
-# MediaPipe
 mp_hands = mp.solutions.hands
 mp_drawing = mp.solutions.drawing_utils
 mp_styles = mp.solutions.drawing_styles
 
-# 骨骼拓扑：from_idx -> to_idx
 BONE_PAIRS = [
     (0, 1), (1, 2), (2, 3), (3, 4),        # 拇指
     (0, 5), (5, 6), (6, 7), (7, 8),        # 食指
@@ -70,10 +61,6 @@ def draw_text_lines(img, lines, org=(10, 30), dy=22, color=(0, 255, 0)):
 
 
 def compute_pinch_thumb_index(landmarks, img_w, img_h, palm_width_px):
-    """
-    用拇指尖 (4) 和食指尖 (8) 的距离来判断 pinch。
-    返回 bool：True = 捏合。
-    """
     if palm_width_px < 1e-3:
         return False
 
@@ -84,7 +71,7 @@ def compute_pinch_thumb_index(landmarks, img_w, img_h, palm_width_px):
     dy = (lm_thumb.y - lm_index.y) * img_h
     dist_px = float((dx * dx + dy * dy) ** 0.5)
 
-    ratio = dist_px / palm_width_px  # 系数化
+    ratio = dist_px / palm_width_px 
     return ratio < PINCH_RATIO_THRESH
 
 
@@ -98,13 +85,10 @@ def main():
         return
 
     calib = CalibState()
-    # 每只手一个 RuntimeState：key = hand_index (0,1,...)
     states = defaultdict(RuntimeState)
 
     last_t = time.time()
     fps = 0.0
-
-    # UDP
     sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
     sock.setblocking(False)
 
@@ -114,7 +98,7 @@ def main():
     try:
         with mp_hands.Hands(
             static_image_mode=False,
-            max_num_hands=2,       # 如需更多手，改大这个数（MediaPipe 实际上一般只支持 2）
+            max_num_hands=2,
             model_complexity=0,
             min_detection_confidence=0.5,
             min_tracking_confidence=0.5,
@@ -134,7 +118,6 @@ def main():
                 fps = 1.0 / dt if dt > 0 else 0.0
                 last_t = now
 
-                # MediaPipe 推理
                 rgb = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
                 rgb.flags.writeable = False
                 res = hands.process(rgb)
@@ -142,7 +125,6 @@ def main():
 
                 hands_out = []
 
-                # ===== 标定采样：只看第 1 只检测到的手 =====
                 if calib.sampling and res.multi_hand_landmarks:
                     lms0 = res.multi_hand_landmarks[0].landmark
                     palm_w0, palm_l0 = compute_palm_width_and_length(lms0, w, h)
@@ -169,22 +151,18 @@ def main():
                         print(f"标定完成: k_w={calib.k_w:.4f}, k_l={calib.k_l:.4f}")
                         print("=" * 60)
 
-                # ===== 处理每一只手 =====
                 if res.multi_hand_landmarks:
                     for hi, (hand_lms, handed) in enumerate(
                         zip(res.multi_hand_landmarks, res.multi_handedness)
                     ):
                         lms = hand_lms.landmark
 
-                        # 1) MediaPipe 给的左右手标签
                         handed_cls = handed.classification[0]
-                        label = handed_cls.label   # "Left" 或 "Right"
+                        label = handed_cls.label
                         score = float(handed_cls.score)
                         is_left = (label == "Left")
 
-                        # 【下面保持你原来那堆：可视化 / 计算 palm_width / curl / depth / bones】
-                        # ...
-                    # ------------- 1) 掌根位置 + 深度 -------------
+
                         wrist_lm = lms[0]
                         wrist_nx = float(wrist_lm.x)
                         wrist_ny = float(wrist_lm.y)
@@ -193,11 +171,10 @@ def main():
                         wrist_px = int(wrist_nx * w)
                         wrist_py = int(wrist_ny * h)
 
-                        # 深度估计
                         palm_width, palm_length = compute_palm_width_and_length(lms, w, h)
                         curl = compute_curl(lms, w, h)
                         side = compute_side(palm_width, palm_length, calib)
-                        face_sign = compute_face_sign(lms)  # [-1,1]
+                        face_sign = compute_face_sign(lms)
 
                         palm_front = 0.5 * (face_sign + 1.0)
                         palm_front = 1.0 - clamp(palm_front, 0.0, 1.0)
@@ -222,12 +199,9 @@ def main():
                                 st.z_ema = EMA_ALPHA * Z_med + (1.0 - EMA_ALPHA) * st.z_ema
                             wrist_depth_m = st.z_ema
 
-                        # ------------- 2) 拇指/食指捏合检测 -------------
                         is_pinch = compute_pinch_thumb_index(
                             lms, w, h, palm_width
                         )
-
-                        # ------------- 3) 21 点 -> 20 条骨骼方向向量 -------------
                         coords = [(float(p.x), float(p.y), float(p.z)) for p in lms]
 
                         bones_out = []
@@ -252,7 +226,6 @@ def main():
                                 "dir": [dirx, diry, dirz],
                             })
 
-                        # ------------- 4) 打包 hand JSON -------------
                         hand_dict = {
                             "hand_index": int(hi),
                             "pinch": bool(is_pinch),
@@ -274,10 +247,8 @@ def main():
 
                         hands_out.append(hand_dict)
 
-                        # HUD 上标一下深度和 pinch
                         txt = ""
                         if wrist_depth_m is not None:
-                            # 转成厘米，两位小数
                             txt += f"Z: {wrist_depth_m * 100:.2f}cm  "
                         txt += f"pinch: {is_pinch}"
                         cv2.putText(
@@ -287,7 +258,6 @@ def main():
                             0.6, (255, 255, 255), 1, cv2.LINE_AA
                         )
 
-                # ===== 5) UDP 发送 =====
                 payload = {
                     "timestamp": time.time(),
                     "fps": float(fps),
@@ -298,10 +268,8 @@ def main():
                     data = json.dumps(payload).encode("utf-8")
                     sock.sendto(data, (UDP_IP, UDP_PORT))
                 except Exception:
-                    # 不影响主循环
                     pass
 
-                # 全局 HUD
                 hud = [f"FPS: {fps:5.1f}"]
                 if calib.sampling:
                     hud.append(f"Calib sampling... {len(calib.samples_w)}/50")

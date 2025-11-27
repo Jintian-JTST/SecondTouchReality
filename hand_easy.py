@@ -21,7 +21,7 @@ from dataclasses import dataclass, field
 from collections import deque
 
 WIN_NAME = "HandDepth"
-K=0.10  # 卷曲对距离的最大修正比例
+K=0.10
 mp_hands = mp.solutions.hands
 mp_drawing = mp.solutions.drawing_utils
 mp_styles = mp.solutions.drawing_styles

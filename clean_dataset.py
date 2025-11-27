@@ -1,4 +1,3 @@
-# clean_dataset.py
 """
 从原始 JSONL 数据里：
 - 丢弃 text 中含有中文字符的样本；
@@ -10,15 +9,12 @@ import json
 import re
 from pathlib import Path
 
-# 输入 / 输出文件名，你可以自己改
 INPUT_PATH = Path("text_object_dataset.jsonl")
 OUTPUT_PATH = Path("cleaned_text_object_dataset.jsonl")
 
-# 正则：匹配任意中文（CJK）字符
 cn_pattern = re.compile(r"[\u4e00-\u9fff]")
 
 def is_english_only(text: str) -> bool:
-    """如果 text 里不含中文字符，就返回 True。"""
     return cn_pattern.search(text) is None
 
 def main():
@@ -39,19 +35,17 @@ def main():
             text = rec.get("text", "")
             label = rec.get("label", "")
 
-            # 丢掉没有 text 或 label 的行
             if not text or label == "":
                 dropped += 1
                 continue
 
-            # 丢掉含中文的样本
             if not is_english_only(text):
                 dropped += 1
                 continue
 
             clean_rec = {
                 "text": text,
-                "label": str(label),  # 统一成字符串
+                "label": str(label),
             }
             fout.write(json.dumps(clean_rec) + "\n")
             kept += 1

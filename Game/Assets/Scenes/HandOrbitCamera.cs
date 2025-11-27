@@ -1,64 +1,52 @@
 using UnityEngine;
-
-/// <summary>
-/// 非左右手区分的“通用相机控制”脚本：
-/// - 不再区分左手/右手，所有手完全对等；
-/// - 当有物体被 PinchGrabBall 抓住时：由抓取脚本接管，这里不动相机；
-/// - 当没有物体被抓住时：
-///     * 单手 pinch -> 用这只手在屏幕上的移动来绕 target 旋转视角；
-///     * 双手 pinch -> 用两只手之间的距离变化来缩放（拉近/拉远）视角。
-/// </summary>
 public class HandOrbitCamera : MonoBehaviour
 {
-    [Header("引用")]
-    public HandFromVectors handTracker;       // 场景里挂 HandFromVectors 的物体
-    public Camera orbitCamera;                // 一般就是 Main Camera
-    public Transform target;                  // 围绕看的对象（模型 / 空物体）
+    [Header("References")]
+    public HandFromVectors handTracker;    
+    public Camera orbitCamera;           
+    public Transform target;               
 
-    [Header("单手旋转设置")]
-    [Tooltip("用哪个关节当控制点，默认 8 = 食指指尖")]
+    [Header("Single Hand Orbit Settings")]
+    [Tooltip("Use which joint as the control point, default 8 = Index Finger Tip")]
     public int controlJointIndex = 8;
 
-    [Tooltip("单手横向移动 1.0（整个屏幕宽度）对应的水平旋转角度")]
+    [Tooltip("Single hand horizontal movement 1.0 (entire screen width) corresponds to horizontal rotation angle")]
     public float horizontalDegrees = 200f;
 
-    [Tooltip("单手纵向移动 1.0（整个屏幕高度）对应的垂直旋转角度")]
+    [Tooltip("Single hand vertical movement 1.0 (entire screen height) corresponds to vertical rotation angle")]
     public float verticalDegrees = 150f;
 
-    [Tooltip("屏幕归一化坐标的最小移动阈值（防抖）")]
+    [Tooltip("Minimum movement threshold for screen normalized coordinates (anti-shake)")]
     public float moveDeadZone = 0.002f;
 
-    [Header("双手缩放设置")]
+    [Header("Two Hand Zoom Settings")]
     public bool enableTwoHandZoom = true;
 
-    [Tooltip("两只手的屏幕距离变化 1.0（从完全重合到两端）对应的半径变化")]
+    [Tooltip("Two hands' screen distance change 1.0 (from completely overlapping to both ends) corresponds to radius change")]
     public float twoHandZoomSensitivity = 3.0f;
 
-    [Tooltip("两只手距离变化小于这个值就忽略，避免抖动")]
+    [Tooltip("Ignore changes in distance between two hands smaller than this value to avoid jitter")]
     public float zoomDeadZone = 0.001f;
 
-    [Tooltip("相机距离 target 的最小半径")]
+    [Tooltip("Minimum radius from the camera to the target")]
     public float minRadius = 0.3f;
 
-    [Tooltip("相机距离 target 的最大半径")]
+    [Tooltip("Maximum radius from the camera to the target")]
     public float maxRadius = 5.0f;
 
-    [Header("与抓取脚本协同")]
-    [Tooltip("为 true 时，只要有任意 PinchGrabBall 被抓住，就完全停止相机旋转/缩放")]
+    [Header("Sample Settings")]
+    [Tooltip("When true, camera rotation/zoom completely stops as long as any PinchGrabBall is grabbed")]
     public bool disableWhenGrabbing = true;
 
-    // 内部状态：单手旋转
     private bool isOrbiting = false;
     private int orbitHandIndex = -1;
     private Vector3 lastOrbitViewportPos;
 
-    // 内部状态：双手缩放
     private bool isZooming = false;
     private int zoomHandA = -1;
     private int zoomHandB = -1;
     private float lastHandsViewportDist;
 
-    // 相机当前半径（距离 target 的距离）
     private float currentRadius = 1.0f;
 
     void Start()
@@ -73,12 +61,12 @@ public class HandOrbitCamera : MonoBehaviour
 
         if (handTracker == null)
         {
-            Debug.LogWarning("HandOrbitCamera: handTracker 没有设置。");
+            Debug.LogWarning("HandOrbitCamera: handTracker is not set.");
         }
 
         if (target == null)
         {
-            Debug.LogWarning("HandOrbitCamera: target 没有设置，视角不会围绕任何东西。");
+            Debug.LogWarning("HandOrbitCamera: target is not set, the view will not orbit around anything.");
         }
     }
 
@@ -87,17 +75,15 @@ public class HandOrbitCamera : MonoBehaviour
         if (handTracker == null || orbitCamera == null || target == null)
             return;
 
-        // 如果有物体被抓住，就把相机控制权全部让给 PinchGrabBall
         if (disableWhenGrabbing && PinchGrabBall.AnyObjectGrabbed)
         {
             ResetStates();
             return;
         }
 
-        // 收集当前所有“正在 pinch 且在相机前方”的手
         int maxHands = handTracker.MaxHandCount;
 
-        const int maxCandidates = 4; // 实际上你一般只有两只手，这里留点余量
+        const int maxCandidates = 4;
         int[] handIndices = new int[maxCandidates];
         Vector3[] worldPositions = new Vector3[maxCandidates];
         Vector3[] viewportPositions = new Vector3[maxCandidates];
@@ -113,7 +99,7 @@ public class HandOrbitCamera : MonoBehaviour
 
             Vector3 vp = orbitCamera.WorldToViewportPoint(jointWorld);
             if (vp.z <= 0f)
-                continue; // 在相机后面的忽略
+                continue;
 
             if (pinchCount < maxCandidates)
             {
@@ -132,17 +118,14 @@ public class HandOrbitCamera : MonoBehaviour
 
         if (pinchCount == 1 || !enableTwoHandZoom)
         {
-            // 只有一只手在 pinch（或者关闭双手缩放） -> 单手旋转模式
             int h = handIndices[0];
             Vector3 vp = viewportPositions[0];
             UpdateSingleHandOrbit(h, vp);
-            // 进入单手模式时，停止双手缩放状态
             isZooming = false;
             zoomHandA = zoomHandB = -1;
         }
         else
         {
-            // 有两只及以上手在 pinch -> 使用前两只做双手缩放
             int hA = handIndices[0];
             int hB = handIndices[1];
             Vector3 vpA = viewportPositions[0];
@@ -150,7 +133,6 @@ public class HandOrbitCamera : MonoBehaviour
 
             UpdateTwoHandZoom(hA, hB, vpA, vpB);
 
-            // 进入双手模式时，停止单手旋转状态
             isOrbiting = false;
             orbitHandIndex = -1;
         }
@@ -165,19 +147,15 @@ public class HandOrbitCamera : MonoBehaviour
         zoomHandB = -1;
     }
 
-    /// <summary>
-    /// 单手旋转：根据这只手在屏幕上的移动，绕 target 做 yaw/pitch 旋转
-    /// </summary>
+
     private void UpdateSingleHandOrbit(int handIndex, Vector3 viewportPos)
     {
         if (!isOrbiting || handIndex != orbitHandIndex)
         {
-            // 新开始用这只手旋转：记录起点，不立即转
             isOrbiting = true;
             orbitHandIndex = handIndex;
             lastOrbitViewportPos = viewportPos;
 
-            // 同步当前半径
             if (orbitCamera != null && target != null)
             {
                 currentRadius = Vector3.Distance(orbitCamera.transform.position, target.position);
@@ -191,15 +169,13 @@ public class HandOrbitCamera : MonoBehaviour
         if (delta.sqrMagnitude < moveDeadZone * moveDeadZone)
             return;
 
-        float yawDeg = delta.x * horizontalDegrees;   // 左右移动 -> 绕世界 Y 轴
-        float pitchDeg = -delta.y * verticalDegrees;  // 上下移动 -> 抬头/低头（反向）
+        float yawDeg = delta.x * horizontalDegrees; 
+        float pitchDeg = -delta.y * verticalDegrees;
 
         OrbitAroundTarget(yawDeg, pitchDeg, 0f);
     }
 
-    /// <summary>
-    /// 双手缩放：根据两只手的屏幕距离变化来调整相机和 target 之间的半径
-    /// </summary>
+
     private void UpdateTwoHandZoom(int handA, int handB, Vector3 viewportA, Vector3 viewportB)
     {
         Vector2 pA = new Vector2(viewportA.x, viewportA.y);
@@ -208,7 +184,6 @@ public class HandOrbitCamera : MonoBehaviour
 
         if (!isZooming || handA != zoomHandA || handB != zoomHandB)
         {
-            // 刚进入双手模式：记录当前距离，不立即缩放
             isZooming = true;
             zoomHandA = handA;
             zoomHandB = handB;
@@ -227,15 +202,12 @@ public class HandOrbitCamera : MonoBehaviour
         if (Mathf.Abs(delta) < zoomDeadZone)
             return;
 
-        // 距离变大（两手分开） -> 视角拉近（半径减小）
         float radiusDelta = -delta * twoHandZoomSensitivity;
 
         OrbitAroundTarget(0f, 0f, radiusDelta);
     }
 
-    /// <summary>
-    /// 实际执行绕 target 的旋转 + 半径调整
-    /// </summary>
+
     private void OrbitAroundTarget(float yawDeg, float pitchDeg, float radiusDelta)
     {
         if (orbitCamera == null || target == null)
@@ -250,12 +222,10 @@ public class HandOrbitCamera : MonoBehaviour
             radius = currentRadius > 0f ? currentRadius : 1.0f;
             if (dir.sqrMagnitude < 1e-6f)
             {
-                // 如果相机就在 target 上，随便给一个方向
                 dir = -orbitCamera.transform.forward;
             }
         }
 
-        // 先根据 yaw/pitch 旋转方向向量
         if (Mathf.Abs(yawDeg) > Mathf.Epsilon)
         {
             Quaternion yawRot = Quaternion.AngleAxis(yawDeg, Vector3.up);
@@ -268,7 +238,6 @@ public class HandOrbitCamera : MonoBehaviour
             dir = pitchRot * dir;
         }
 
-        // 再根据 radiusDelta 调整半径
         radius = Mathf.Clamp(radius + radiusDelta, minRadius, maxRadius);
         currentRadius = radius;
 

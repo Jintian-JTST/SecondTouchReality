@@ -21,7 +21,7 @@ public class TextQueryClient_TMP : MonoBehaviour
     public GameObject successPanel;     
 
     [Header("Model Library")]
-    public ModelLibrary modelLibrary;   // 新增：模型管理器
+    public ModelLibrary modelLibrary; 
 
     private TcpClient client;
     private NetworkStream stream;
@@ -43,13 +43,11 @@ public class TextQueryClient_TMP : MonoBehaviour
 
     private IEnumerator ConnectToServer()
     {
-        // 先等一帧，保证场景初始化完
         yield return null;
 
         try
         {
             client = new TcpClient();
-            // 同步连接，局域网 localhost 基本一瞬间完成
             client.Connect(serverIp, serverPort);
             stream = client.GetStream();
             connected = true;
@@ -65,11 +63,11 @@ public class TextQueryClient_TMP : MonoBehaviour
 
     public void OpenDialog()
     {
-        Debug.Log("OpenDialog() 被调用了！！！");
+        Debug.Log("OpenDialog() called.");
 
         if (dialogPanel == null)
         {
-            Debug.LogWarning("dialogPanel 未绑定！");
+            Debug.LogWarning("dialogPanel is not bound!");
             return;
         }
 
@@ -95,7 +93,7 @@ public class TextQueryClient_TMP : MonoBehaviour
     {
         if (descriptionInput == null)
         {
-            Debug.LogWarning("descriptionInput 未绑定");
+            Debug.LogWarning("descriptionInput Not Bound!");
             return;
         }
 
@@ -161,23 +159,22 @@ public class TextQueryClient_TMP : MonoBehaviour
         string resp = Encoding.UTF8.GetString(buffer, 0, n).Trim();
         Debug.Log("Server resp: " + resp);
 
-        // === 新增：根据返回的编号调出模型 ===
         if (modelLibrary != null)
         {
             var go = modelLibrary.ShowModelByLabel(resp);
             if (go == null)
             {
-                Debug.LogWarning($"TextQueryClient_TMP: ModelLibrary 里没有找到名为 {resp} 的模型。");
+                Debug.LogWarning($"TextQueryClient_TMP: ModelLibrary did not find model named {resp}.");
             }
         }
         else
         {
-            Debug.LogWarning("TextQueryClient_TMP: modelLibrary 未设置，无法实例化模型。");
+            Debug.LogWarning("TextQueryClient_TMP: modelLibrary is not set, cannot instantiate model.");
         }
         // ===================================
 
         if (resultText != null)
-            resultText.text = $"预测模型: {resp}";
+            resultText.text = $"Predicted: {resp}";
 
         if (successPanel != null)
         {

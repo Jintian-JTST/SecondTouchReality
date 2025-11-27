@@ -4,16 +4,6 @@ using System.Net.Sockets;
 using System.Text;
 using UnityEngine;
 
-/// <summary>
-/// 从 hand_two_hands_z_udp.py 发来的 UDP JSON 中读取：
-///  - 多只手的掌根 3D 信息 + 20 条骨骼方向向量；
-///  - 每只手一个 pinch 布尔量（拇指+食指是否捏合）；
-/// 在 Unity 里:
-///  1) 根据掌根归一化坐标 + depth_m 投影到 3D 空间 -> wristWorldPos；
-///  2) 结合每一节骨骼长度 + 单位向量，重建 21 个关节位置；
-///  3) 支持多只手：每只手 21 个小球 + 20 条骨骼线；
-///  4) 如果某只手 pinch = true，就“抓住”一个球，让球跟着这只手的食指指尖走。
-/// </summary>
 public class HandFromVectors : MonoBehaviour
 {
     [Header("UDP Settings")]
@@ -27,20 +17,18 @@ public class HandFromVectors : MonoBehaviour
     public float sphereRadius = 0.01f;
     public bool drawBones = true;
 
-    [Header("Bone Lengths (按 BONE_PAIRS 顺序)")]
+    [Header("Bone Lengths")]
     [SerializeField]
     private float[] boneLengths = new float[20];
 
-    // 同时支持的最大手数量
     private const int MaxHands = 5;
 
     [Header("Grab / Pinch Object")]
     public bool enableGrabSphere = true;
-    public GameObject grabSpherePrefab;      // 可选：你可以在 Inspector 里拖自己做好的球
-    public float grabSphereRadius = 0.03f;   // 球的半径（米）
-    public int grabJointIndex = 8;           // 默认跟随食指指尖(关节 8)
+    public GameObject grabSpherePrefab;     
+    public float grabSphereRadius = 0.03f;  
+    public int grabJointIndex = 8;          
 
-    // ============ 内部数据结构（匹配 JSON） ============
 
     [Serializable]
     public class RootPayload
@@ -56,10 +44,9 @@ public class HandFromVectors : MonoBehaviour
     {
         public int hand_index;
 
-        // 新增：来自 Python 的左右手信息
-        public bool is_left;        // true = 左手, false = 右手
-        public string hand_label;   // "Left"/"Right"
-        public float hand_score;    // 置信度
+        public bool is_left;
+        public string hand_label;
+        public float hand_score;
 
         public bool pinch;
         public WristData wrist;
@@ -96,45 +83,35 @@ public class HandFromVectors : MonoBehaviour
         public int id;
         public int from;
         public int to;
-        public float[] dir;  // [dx, dy, dz]
+        public float[] dir; 
     }
 
-    // 与 Python 一致的骨骼拓扑
     private readonly (int from, int to)[] bonePairs = new (int, int)[]
     {
-        (0, 1), (1, 2), (2, 3), (3, 4),        // 拇指
-        (0, 5), (5, 6), (6, 7), (7, 8),        // 食指
-        (0, 9), (9, 10), (10, 11), (11, 12),   // 中指
-        (0, 13), (13, 14), (14, 15), (15, 16), // 无名指
-        (0, 17), (17, 18), (18, 19), (19, 20)  // 小指
+        (0, 1), (1, 2), (2, 3), (3, 4),    
+        (0, 5), (5, 6), (6, 7), (7, 8),    
+        (0, 9), (9, 10), (10, 11), (11, 12), 
+        (0, 13), (13, 14), (14, 15), (15, 16), 
+        (0, 17), (17, 18), (18, 19), (19, 20)  
     };
 
-    // UDP
     private UdpClient udp;
     private IPEndPoint remoteEndPoint;
 
-    // 多手：21 关节 + 20 骨骼线
-    private GameObject[,] jointObjects;   // [hand, jointId]
-    private Vector3[,] jointPositions;    // [hand, jointId]
-    private LineRenderer[,] boneLines;    // [hand, boneIndex]
+    private GameObject[,] jointObjects;   
+    private Vector3[,] jointPositions;   
+    private LineRenderer[,] boneLines;  
 
-    // 给外部脚本用的当前状态
-    private bool[] hasHand = new bool[MaxHands];   // 当前这一帧，这个 handIndex 上有没有手
-    private bool[] currentPinch = new bool[MaxHands]; // 当前这一帧，这只手有没有 pinch
-    private bool[] isLeftHand = new bool[MaxHands]; // True = 左手, False = 右手（或未知）
-
-
-    // 最新一帧收到的所有手
+    private bool[] hasHand = new bool[MaxHands]; 
+    private bool[] currentPinch = new bool[MaxHands]; 
+    private bool[] isLeftHand = new bool[MaxHands]; 
     private HandData[] latestHands;
     private readonly object handLock = new object();
-
-    // 抓球相关
     private GameObject grabSphere;
     private Rigidbody grabSphereRb;
-    private int grabbedHand = -1;         // -1 表示当前没人抓球
+    private int grabbedHand = -1;       
     private bool[] lastPinch = new bool[MaxHands];
 
-    // GUI
     private Rect guiWindowRect = new Rect(10, 10, 260, 420);
     private Vector2 guiScroll = Vector2.zero;
 
@@ -145,7 +122,6 @@ public class HandFromVectors : MonoBehaviour
 
         InitDefaultBoneLengths();
 
-        // ---------- 初始化多手关节 & 骨骼 ----------
         jointObjects = new GameObject[MaxHands, 21];
         jointPositions = new Vector3[MaxHands, 21];
         boneLines = new LineRenderer[MaxHands, bonePairs.Length];
@@ -155,7 +131,6 @@ public class HandFromVectors : MonoBehaviour
             var handRoot = new GameObject("Hand_" + h);
             handRoot.transform.SetParent(transform, false);
 
-            // 21 个关节球
             for (int j = 0; j < 21; j++)
             {
                 var sphere = GameObject.CreatePrimitive(PrimitiveType.Sphere);
@@ -169,7 +144,6 @@ public class HandFromVectors : MonoBehaviour
                 jointObjects[h, j] = sphere;
             }
 
-            // 20 条骨骼线
             for (int i = 0; i < bonePairs.Length; i++)
             {
                 var go = new GameObject($"Hand{h}_Bone_{i}");
@@ -187,7 +161,6 @@ public class HandFromVectors : MonoBehaviour
             }
         }
 
-        // ---------- 抓球 ----------
         if (enableGrabSphere)
         {
             if (grabSpherePrefab != null)
@@ -210,7 +183,6 @@ public class HandFromVectors : MonoBehaviour
             grabSphereRb.mass = 0.1f;
         }
 
-        // ---------- UDP ----------
         udp = new UdpClient(listenPort);
         udp.Client.Blocking = false;
         remoteEndPoint = new IPEndPoint(IPAddress.Any, 0);
@@ -231,7 +203,6 @@ public class HandFromVectors : MonoBehaviour
         UpdateHandPoseFromData();
     }
 
-    // ========== 初始化默认骨骼长度 ==========
     private void InitDefaultBoneLengths()
     {
         if (boneLengths == null || boneLengths.Length != 20)
@@ -274,7 +245,6 @@ public class HandFromVectors : MonoBehaviour
         boneLengths[19] = 0.022f;
     }
 
-    // ========== UDP 接收并解析 JSON ==========
     private void ReceiveUdpPackets()
     {
         if (udp == null) return;
@@ -302,7 +272,6 @@ public class HandFromVectors : MonoBehaviour
         }
     }
 
-    // ========== 根据 latestHands 更新所有手的关节 + 抓球 ==========
     private void UpdateHandPoseFromData()
     {
         HandData[] handsCopy = null;
@@ -312,7 +281,6 @@ public class HandFromVectors : MonoBehaviour
                 handsCopy = (HandData[])latestHands.Clone();
         }
 
-        // 每帧先清空标记
         for (int i = 0; i < MaxHands; i++)
         {
             hasHand[i] = false;
@@ -333,7 +301,6 @@ public class HandFromVectors : MonoBehaviour
         }
 
 
-        // 先清空所有手的显示
         for (int h = 0; h < MaxHands; h++)
         {
             for (int j = 0; j < 21; j++)
@@ -364,12 +331,8 @@ public class HandFromVectors : MonoBehaviour
             hasHand[h] = true;
             currentPinch[h] = hand.pinch;
 
-            // 1) 掌根世界坐标
             Vector3 wristWorldPos = ComputeWristWorldPos(hand.wrist, targetCamera, depthScale);
             jointPositions[h, 0] = wristWorldPos;
-
-
-            // 2) 骨骼链条重建 21 个关节
             if (hand.bones != null && hand.bones.Length > 0)
             {
                 int boneCount = Mathf.Min(hand.bones.Length, bonePairs.Length);
@@ -387,8 +350,6 @@ public class HandFromVectors : MonoBehaviour
                         float dy = bone.dir[1];
                         float dz = bone.dir[2];
 
-                        // Python: x 右, y 下, z 朝相机(负)
-                        // Unity Camera: x 右, y 上, z 向前(正)
                         dirCam = new Vector3(dx, -dy, -dz);
                         if (dirCam.sqrMagnitude > 1e-6f)
                             dirCam.Normalize();
@@ -405,7 +366,6 @@ public class HandFromVectors : MonoBehaviour
                 }
             }
 
-            // 3) 画关节球 + 骨骼线
             Color sphereColor = hand.pinch ? Color.yellow : Color.white;
 
             for (int j = 0; j < 21; j++)
@@ -440,7 +400,6 @@ public class HandFromVectors : MonoBehaviour
                 }
             }
 
-            // 4) 抓球逻辑：检测 pinch 的前一帧/当前帧
             bool pinchNow = hand.pinch;
             bool pinchPrev = lastPinch[h];
 
@@ -448,14 +407,11 @@ public class HandFromVectors : MonoBehaviour
         }
     }
 
-    /// <summary>
-    /// 把 wrist 的归一化坐标 + 深度(m) 转成 3D 世界坐标。
-    /// </summary>
     private Vector3 ComputeWristWorldPos(WristData wrist, Camera cam, float depthScale)
     {
         float depth = wrist.depth_m;
         if (depth <= 0.0f)
-            depth = 0.4f; // 没标定时默认 40cm
+            depth = 0.4f;
 
         depth *= depthScale;
 
@@ -474,16 +430,12 @@ public class HandFromVectors : MonoBehaviour
         return cam.transform.TransformPoint(posCam);
     }
 
-    // ========== OnGUI: 调整骨骼长度的小窗口 ==========
-
-    // 让外部脚本查询：这一帧 handIndex 有没有手 && 是不是在 pinch
     public bool IsHandPinching(int handIndex)
     {
         if (handIndex < 0 || handIndex >= MaxHands) return false;
         return hasHand[handIndex] && currentPinch[handIndex];
     }
 
-    // 让外部脚本拿某只手某个关节的世界坐标（成功返回 true）
     public bool TryGetJointPosition(int handIndex, int jointIndex, out Vector3 position)
     {
         position = Vector3.zero;
@@ -496,9 +448,6 @@ public class HandFromVectors : MonoBehaviour
     }
 
 
-
-
-    // 让外部脚本知道支持的最大手数
     public int MaxHandCount
     {
         get { return MaxHands; }
@@ -508,14 +457,12 @@ public class HandFromVectors : MonoBehaviour
 
 
 
-    // handIndex 是否是左手
     public bool IsLeftHand(int handIndex)
     {
         if (handIndex < 0 || handIndex >= MaxHands) return false;
         return hasHand[handIndex] && isLeftHand[handIndex];
     }
 
-    // handIndex 是否是右手
     public bool IsRightHand(int handIndex)
     {
         if (handIndex < 0 || handIndex >= MaxHands) return false;
@@ -530,7 +477,7 @@ public class HandFromVectors : MonoBehaviour
     {
         GUILayout.BeginVertical();
 
-        GUILayout.Label("调节每节手指骨长度（单位：米）");
+        GUILayout.Label("Adjust Bone Lengths");
         GUILayout.Space(5);
 
         guiScroll = GUILayout.BeginScrollView(guiScroll, false, true);
@@ -561,7 +508,7 @@ public class HandFromVectors : MonoBehaviour
         GUILayout.EndScrollView();
 
         GUILayout.Space(5);
-        if (GUILayout.Button("重置为默认长度"))
+        if (GUILayout.Button("Reset to Default Lengths"))
             InitDefaultBoneLengths();
 
         GUILayout.EndVertical();

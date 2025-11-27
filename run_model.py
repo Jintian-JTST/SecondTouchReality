@@ -15,14 +15,12 @@ from sklearn.feature_extraction.text import HashingVectorizer
 MODEL_PATH = Path("text_model.pkl")
 
 def init_vectorizer(n_features: int) -> HashingVectorizer:
-    # 使用字符 n-gram（char 或 char_wb），ngram_range 可调
-    # char_wb 会在单词边界内部构造 n-grams，更关注词内部片段
     return HashingVectorizer(
         n_features=n_features,
         alternate_sign=False,
         norm="l2",
-        analyzer="char_wb",        # 或 "char"
-        ngram_range=(3, 6),        # 3-6 长度的字符片段；按语言/任务调整
+        analyzer="char_wb",       
+        ngram_range=(3, 6),      
     )
 
 
@@ -46,13 +44,12 @@ def infer_once(query: str, clf, label_encoder, vectorizer, top_k: int = 5) -> Li
     if hasattr(clf, "predict_proba"):
         probs = clf.predict_proba(Xq)[0]
     else:
-        # 理论上 loss="log_loss" 会有 predict_proba，这只是兜底
         scores = clf.decision_function(Xq)[0]
         scores = np.atleast_1d(scores)
         e = np.exp(scores - np.max(scores))
         probs = e / e.sum()
 
-    indices = np.argsort(-probs)  # 从大到小排
+    indices = np.argsort(-probs) 
     results: List[Dict[str, Any]] = []
     for idx in indices[:top_k]:
         label = label_encoder.inverse_transform([idx])[0]

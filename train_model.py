@@ -1,5 +1,4 @@
 
-# train_model_with_eval.py
 """
 Train program with evaluation:
 - Reads clean_dataset JSONL (text,label)
@@ -21,8 +20,6 @@ from sklearn.metrics import accuracy_score, classification_report
 
 DATA_PATH = Path("cleaned_text_object_dataset.jsonl")
 MODEL_PATH = Path("text_model.pkl")
-
-# HashingVectorizer dimensionality
 N_FEATURES = 2 ** 18  # 262144
 
 
@@ -48,20 +45,15 @@ def load_dataset() -> Tuple[List[str], List[str]]:
     return texts, labels
 
 
-# 替换前（你现在的样子）见你的文件。:contentReference[oaicite:2]{index=2}
-
-# 替换为下面这个 init_vectorizer
 from sklearn.feature_extraction.text import HashingVectorizer
 
 def init_vectorizer() -> HashingVectorizer:
-    # 使用字符 n-gram（char 或 char_wb），ngram_range 可调
-    # char_wb 会在单词边界内部构造 n-grams，更关注词内部片段
     return HashingVectorizer(
         n_features=N_FEATURES,
         alternate_sign=False,
         norm="l2",
-        analyzer="char_wb",        # 或 "char"
-        ngram_range=(3, 6),        # 3-6 长度的字符片段；按语言/任务调整
+        analyzer="char_wb",
+        ngram_range=(3, 6),
     )
 
 
@@ -77,7 +69,6 @@ def train():
     vectorizer = init_vectorizer()
     X = vectorizer.transform(texts)
 
-    # If existing model present, try to continue training when possible
     if MODEL_PATH.exists():
         print(f"\nDetected existing model file: {MODEL_PATH.resolve()}")
         data = joblib.load(MODEL_PATH)
@@ -117,28 +108,23 @@ def train():
         )
         clf.partial_fit(X, y, classes=classes_indices)
 
-    # Save model (use compression to reduce file size)
     model_data = {
         "classifier": clf,
         "label_encoder": label_encoder,
         "n_features": N_FEATURES,
     }
-    # Use compress=3 to save space
     joblib.dump(model_data, MODEL_PATH, compress=3)
 
-    print("\n✅ Training complete.")
+    print("\n Training complete.")
     print(f"Model saved to: {MODEL_PATH.resolve()}")
     print(f"Label classes: {list(label_encoder.classes_)}")
 
-    # --- Evaluation on the same training data (quick diagnostic) ---
     try:
         if hasattr(clf, "predict"):
             y_pred_idx = clf.predict(X)
         else:
-            # fallback: use decision_function -> argmax
             scores = clf.decision_function(X)
             if scores.ndim == 1:
-                # binary-ish case
                 y_pred_idx = (scores > 0).astype(int)
             else:
                 y_pred_idx = scores.argmax(axis=1)
@@ -146,16 +132,13 @@ def train():
         print("Could not run prediction on training set:", e)
         return
 
-    # Convert indices back to labels (strings) for reporting
     inv_labels = label_encoder.inverse_transform(y_pred_idx)
-    # true labels:
     y_true_idx = label_encoder.transform(labels)
     y_true = label_encoder.inverse_transform(y_true_idx)
 
     acc = accuracy_score(y_true_idx, y_pred_idx)
     print(f"\nTraining accuracy: {acc:.4f}")
 
-    # Print a classification report (per-label precision/recall/f1)
     print("\nClassification report (on training set):")
     print(classification_report(y_true, inv_labels, zero_division=0))
 

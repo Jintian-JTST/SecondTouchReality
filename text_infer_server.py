@@ -3,8 +3,7 @@
 #   Unity 发送一行文本（描述） -> 服务器返回 "label|prob\n"
 
 import socketserver
-from run_model import load_model, infer_once  # 用你现成的代码 
-
+from run_model import load_model, infer_once
 HOST = "127.0.0.1"
 PORT = 9009
 
@@ -33,10 +32,9 @@ class TextInferHandler(socketserver.StreamRequestHandler):
             try:
                 results = infer_once(query, clf, label_encoder, vectorizer, top_k=1)
                 top = results[0]
-                label = top["label"]   # 这里就是你训练时的 label，比如 "apple" 或 "101"
+                label = top["label"]
                 prob = top["prob"]
 
-                # 协议：返回 "label|prob\n"
                 resp = f"{label}"
                 print(f"[SERVER] Query: {query!r}")
                 print(f"[SERVER] Response: {resp!r}", flush=True)
