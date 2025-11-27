@@ -38,7 +38,7 @@ WIN_NAME = "Hand UDP Vectors (Multi-hand + Pinch)"
 UDP_IP = "127.0.0.1"
 UDP_PORT = 5065
 
-EMA_ALPHA = 0.35
+EMA_ALPHA = 0.6
 
 # 捏合阈值：拇指尖-食指尖距离 / 掌宽 < 这个值 就认为在 pinch
 PINCH_RATIO_THRESH = 0.35
@@ -171,7 +171,9 @@ def main():
 
                 # ===== 处理每一只手 =====
                 if res.multi_hand_landmarks:
-                    for hi, (hand_lms, handed) in enumerate(zip(res.multi_hand_landmarks, res.multi_handedness)):
+                    for hi, (hand_lms, handed) in enumerate(
+                        zip(res.multi_hand_landmarks, res.multi_handedness)
+                    ):
                         lms = hand_lms.landmark
 
                         # 1) MediaPipe 给的左右手标签
@@ -180,7 +182,9 @@ def main():
                         score = float(handed_cls.score)
                         is_left = (label == "Left")
 
-                        # ------------- 1) 掌根位置 + 深度 -------------
+                        # 【下面保持你原来那堆：可视化 / 计算 palm_width / curl / depth / bones】
+                        # ...
+                    # ------------- 1) 掌根位置 + 深度 -------------
                         wrist_lm = lms[0]
                         wrist_nx = float(wrist_lm.x)
                         wrist_ny = float(wrist_lm.y)
@@ -267,6 +271,7 @@ def main():
                             },
                             "bones": bones_out,
                         }
+
                         hands_out.append(hand_dict)
 
                         # HUD 上标一下深度和 pinch

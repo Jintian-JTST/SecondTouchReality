@@ -55,12 +55,17 @@ public class HandFromVectors : MonoBehaviour
     public class HandData
     {
         public int hand_index;
-        public bool is_left;     // Python 传来的左右手标记
-        public string hand_label; // 可选，用来 debug ("Left"/"Right")
+
+        // 新增：来自 Python 的左右手信息
+        public bool is_left;        // true = 左手, false = 右手
+        public string hand_label;   // "Left"/"Right"
+        public float hand_score;    // 置信度
+
         public bool pinch;
         public WristData wrist;
         public BoneData[] bones;
     }
+
 
     [Serializable]
     public class WristData
@@ -313,8 +318,8 @@ public class HandFromVectors : MonoBehaviour
             hasHand[i] = false;
             currentPinch[i] = false;
             isLeftHand[i] = false;
-
         }
+
 
         if (handsCopy == null || targetCamera == null)
         {
@@ -493,6 +498,15 @@ public class HandFromVectors : MonoBehaviour
 
 
 
+    // 让外部脚本知道支持的最大手数
+    public int MaxHandCount
+    {
+        get { return MaxHands; }
+    }
+
+
+
+
 
     // handIndex 是否是左手
     public bool IsLeftHand(int handIndex)
@@ -505,17 +519,10 @@ public class HandFromVectors : MonoBehaviour
     public bool IsRightHand(int handIndex)
     {
         if (handIndex < 0 || handIndex >= MaxHands) return false;
-        // 只要不是左手，就当右手用（方便处理 Python 还没传 is_left 时的情况）
         return hasHand[handIndex] && !isLeftHand[handIndex];
     }
 
 
-
-    // 让外部脚本知道支持的最大手数
-    public int MaxHandCount
-    {
-        get { return MaxHands; }
-    }
 
 
 
