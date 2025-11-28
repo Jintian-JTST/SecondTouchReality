@@ -35,6 +35,7 @@ WIN_NAME = "Hand UDP Vectors (Multi-hand + Pinch)"
 
 UDP_IP = "127.0.0.1"
 UDP_PORT = 5065
+ARDUINO_UDP_PORT = 5066      # 给 Python 舵机脚本
 EMA_ALPHA = 0.6
 PINCH_RATIO_THRESH = 0.35
 
@@ -277,6 +278,7 @@ def main():
                 try:
                     data = json.dumps(payload).encode("utf-8")
                     sock.sendto(data, (UDP_IP, UDP_PORT))
+                    sock.sendto(data, (UDP_IP, ARDUINO_UDP_PORT))
                 except Exception:
                     pass
 

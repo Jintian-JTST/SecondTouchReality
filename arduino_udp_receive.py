@@ -8,7 +8,7 @@ from serial.serialutil import SerialException
 SERIAL_PORT = 'COM9'
 BAUD_RATE = 9600
 UDP_IP = "127.0.0.1"
-UDP_PORT = 5065
+UDP_PORT = 5066
 MAX_UDP_PACKET_SIZE = 8192  # 限制数据包大小
 
 def send_to_arduino(ser, data):
