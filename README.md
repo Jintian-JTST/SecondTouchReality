@@ -1,203 +1,762 @@
+# SecondTouchReality Overview
 
-# SecondTouchReality (WIP)
+### **SecondTouchReality is an evolution of OneTouchReality**
 
-SecondTouchReality 是一个“小型全链路系统”，把 **Python 手部追踪 + 深度估计 + 文本分类模型** 和 **Unity 里的 3D 手、抓取交互与教学场景** 串成一条流水线。后面会预留一个 **硬件接口**（手套 / Arduino 等）来做真实世界的反馈。
+SecondTouchReality is a derivative of a **“VR hand-gesture based teaching-object system”**.
+Its focus is:
 
----
+**Natural-language → object generation**
+* **pinch-gesture grabbing in 3D**
+* **single-channel servo feedback of the pinch state**,
 
-## 1. 整体思路
+with a more modular and extensible architecture.
 
-从用户视角，这套系统做了三件事：
+It’s a small but reasonably complete **end-to-end system** that keeps the whole chain while “extracting the skeleton” and making it lightweight:
 
-1. **看懂手**：Python 使用 MediaPipe 检测双手关键点，估计掌根到摄像头的真实距离，算出骨骼方向和捏合（pinch）。然后通过 UDP 把这些数据发给 Unity。  
-2. **看懂文本**：用户在 Unity 里输入一句话（比如 “a small red apple”），Python 端的文本模型会判断最接近哪一个物体 ID，并把这个标签回传给 Unity。  
-3. **在 Unity 里“摸到”东西**：Unity 里根据标签加载对应 3D 模型，重建 3D 手部骨骼，让你用 pinch 抓起、移动、旋转，同时也能用 pinch 控制相机视角。  
+* **Python side**: hand tracking + depth estimation + text classification model
+* **Unity side**: 3D hand skeleton reconstruction + grabbing interaction + camera control
+* **Hardware side**: Arduino / servo / glove (interface reserved)
 
-未来会增加一层 **硬件接口**：Unity 或 Python 进一步把交互事件映射成串口命令，驱动自制手套或其他教学装置（目前预留为 TODO）。
+Wired together as one pipeline:
 
----
+```
+Camera → Python understands your hand + your sentence → Unity generates an interactive 3D scene → drives hardware feedback
+```
 
-## 2. 系统架构概览
+The repo is still at prototype stage, but it already shows a full loop of:
 
 ```text
-Camera → Python(MediaPipe + Depth) → UDP → Unity HandFromVectors
-                                   ↑
-                     Python Text Model ← Unity TextQueryClient
-                                   ↓
-                           (Future) Hardware / Arduino
-````
-
-### 2.1 Python：手部深度 & 骨骼 + UDP
-
-主要脚本：
-
-* `hand_easy.py`
-
-  * 单手版本的掌宽 / 掌长 / curl / side / 掌心朝向等计算，并给出一个稳定的 `Z_disp`（掌根距离，单位米）。
-
-* `hand_two_hands_z_udp.py`
-
-  * 支持多只手（通常 2 只），对每只手：
-
-    * 估计掌根深度（米）；
-    * 检测拇指尖–食指尖 pinch；
-    * 生成 20 条骨骼方向单位向量；
-  * 通过 UDP 把 JSON 发送到 Unity（默认 `127.0.0.1:5065`）。
-
-### 2.2 Python：文本 → 物体标签 模型
-
-数据与训练流程：
-
-* `collect_data.py`：交互式收集数据，逐条输入 “描述文本 + 标签”，追加到 `text_object_dataset.jsonl`。
-* `clean_dataset.py`：清洗数据，只保留英文样本，写入 `cleaned_text_object_dataset.jsonl`。
-* `train_model_with_eval.py`：
-
-  * 使用字符级 n-gram 的 `HashingVectorizer` + `SGDClassifier`；
-  * 训练完成后保存到 `text_model.pkl`，并在训练集上做一个简单的精度报告。
-* `run_model.py`：加载模型，对一条文本做 top-k 推理，可在命令行直接试。
-* `text_infer_server.py`：
-
-  * 一个多线程 TCP 服务（默认监听 `127.0.0.1:9009`）；
-  * Unity 发送一行描述，它返回最可能的标签字符串。
-
-### 2.3 Unity：3D 手、抓取与相机控制
-
-主要 C# 组件：
-
-* `HandFromVectors.cs`
-
-  * 监听 UDP 端口（默认 5065），接收 Python 发来的 JSON；
-  * 为每只手重建 21 个关节位置 + 20 条骨骼线，并用小球画出来；
-  * 提供 API：
-
-    * `IsHandPinching(int handIndex)`
-    * `TryGetJointPosition(int handIndex, int jointIndex, out Vector3 pos)`
-    * `MaxHandCount` / `IsLeftHand` / `IsRightHand`。
-
-* `PinchGrabBall.cs`
-
-  * 挂在“可以被抓”的物体上；
-  * 当任意一只手 pinch 且食指靠近物体时，开始抓取；
-  * 抓住后物体跟随掌根（或你指定的关节），带有平滑与宽限时间，防止 pinching 抖动导致频繁松手；
-  * 静态属性 `AnyObjectGrabbed` 让别的脚本知道场景里是否有东西被抓着。
-
-* `HandOrbitCamera.cs`
-
-  * 完全不区分左右手，只要手在 pinch 就可以控制视角；
-  * 没有物体被抓住时：
-
-    * 单手 pinch：拖动视角，绕 target 旋转；
-    * 双手 pinch：两手距离变化控制相机远近；
-  * 有任意物体被 `PinchGrabBall` 抓住时，会让出相机控制权。
-
-* `ModelLibrary.cs`
-
-  * 管理挂在自己下面的所有子物体，把它们当作一个“模型字典”；
-  * `ShowModelByLabel("023")` 会：
-
-    * 激活名为 `"023"` 的子物体；
-    * 把它摆在摄像机前方设定距离处；
-    * 自动给它挂上 `PinchGrabBall`，能被手抓起来。
-
-* `TextQueryClient_TMP.cs`
-
-  * Unity 侧的 TCP 客户端；
-  * 弹出一个 TMP 输入框，让用户输入英文描述；
-  * 把文本发送给 `text_infer_server.py`，接收回来的标签字符串；
-  * 调用 `ModelLibrary.ShowModelByLabel(resp)` 生成对应模型，并在 UI 上显示预测结果。
+Perception → Semantics → Interaction → Hardware
+```
 
 ---
 
-## 3. 依赖与环境
+## 1. System Overview
 
-### 3.1 Python 环境
+From an end-user point of view, the system does three main things:
 
-项目提供了 `requirements.txt`，包含手部追踪、机器学习和可视化相关依赖，例如：
+1. **Understand your hand**
 
-* `mediapipe`
-* `opencv-python`
-* `scikit-learn`
-* `torch`, `timm`
-* `numpy`, `pandas` 等等。
+   * Python uses MediaPipe Hands to detect 21 hand keypoints.
+   * It computes palm width, palm length, finger curl, side pose, palm/backs-of-hand orientation.
+   * A one-time calibration converts palm width / length into real-world wrist-to-camera distance (meters), with filtering.
+   * It packs the wrist 3D position, 20 bone direction vectors and the `pinch` state into JSON and sends it to Unity over UDP.
 
-推荐做法：
+2. **Understand your words**
+
+   * Unity pops up a dialog where you type an English description (e.g. `"a small red apple"`).
+   * A lightweight text model on Python side uses `HashingVectorizer + SGDClassifier` for multi-class classification, and outputs a discrete label (e.g. `"101"`).
+   * A TCP connection returns `"101"` to Unity.
+
+3. **Let you grab things**
+
+   * Unity uses `HandFromVectors` to reconstruct the 3D hand skeleton from the UDP JSON, drawing it with spheres and lines.
+   * `PinchGrabBall` lets you pinch objects in the scene so they follow your hand.
+   * `HandOrbitCamera` lets you rotate / zoom the camera with pinch + hand movement when you’re not grabbing anything.
+   * `ModelLibrary` / `RuntimeModelLoader` load the corresponding 3D model (prefab or GLB) based on the label.
+
+4. **Directory Structure**
+
+```text
+SecondTouchReality/
+├── README.md                  # English / mixed-language readme (overall design)
+├── README_CHN.md              # Chinese readme (overall design)
+├── requirements.txt           # Python dependencies
+├── text_model.pkl             # Trained text classification model
+├── main.py                    # combined_server, one-click to start the whole pipeline
+├── .gitignore
+├── unecessary/                # Old scripts or unused resources
+├── tools/
+│   ├── hand_easy.py           # Hand distance estimation + calibration logic
+│   ├── hand_udp.py            # Multi-hand + bone vectors + pinch → UDP JSON
+│   ├── arduino_udp_receive.py # Simple bridge: UDP → Arduino
+│   ├── text_infer_server.py   # Text model inference TCP server
+│   ├── run_model.py           # Load text_model.pkl, provide CLI inference
+│   └── __pycache__/           # Python cache
+├── test/
+│   ├── collect_data.py        # Collect “description text + label” data
+│   ├── clean_dataset.py       # Clean JSONL dataset
+│   ├── train_model.py         # Train text classification model and output text_model.pkl
+│   ├── text_object_dataset.jsonl
+│   ├── cleaned_text_object_dataset.jsonl
+│   └── object_models_csv.csv  # Text labels ↔ model ID mapping table
+├── Game/                      # Unity demo project (can be opened directly)
+│   ├── SampleScene.unity      # Main scene
+│   ├── models/                # Several glb models (apple, banana, bowl, etc.)
+│   └── Scripts/               # Main C# scripts
+│       ├── HandFromVectors.cs
+│       ├── HandOrbitCamera.cs
+│       ├── PinchGrabBall.cs
+│       ├── ModelLibrary.cs
+│       ├── RuntimeModelLoader.cs
+│       └── TextQueryClient_TMP.cs
+└── ...
+```
+
+**Root directory**
+
+* `main.py`: Recommended entry script. Opens the camera, starts the UDP → Unity hand data stream, registers the `on_payload` callback to map pinch state to serial commands, and starts the text inference server.
+* `requirements.txt`: All Python dependencies; usually installed via `pip install -r requirements.txt`.
+* `text_model.pkl`: Trained by `test/train_model.py`, used to map natural language descriptions to object labels.
+
+**`tools/` – runtime tools layer**
+
+* `hand_easy.py`: Encapsulates distance calibration and filtering logic; used by `hand_udp.py` and other scripts.
+
+* `hand_udp.py`:
+
+  * Uses MediaPipe, supports multiple hands.
+  * Outputs wrist depth, bone directions, pinch state.
+  * Sends JSON packets to Unity via UDP (default `127.0.0.1:5065`).
+  * Allows external `on_payload` callback.
+
+* `text_infer_server.py`: Starts a `socketserver`-based multithreaded TCP server, uses `infer_once` from `run_model.py` to call the text model in memory.
+
+* `arduino_udp_receive.py`: Simplified bridge program; reads hand JSON over UDP, cares only about `hands[].pinch`, detects state changes and sends `'0'/'1'` to the Arduino serial port.
+
+**`test/` – data & model playground**
+
+* `collect_data.py`: Interactive CLI tool to quickly collect training data.
+* `clean_dataset.py`: Filters out samples containing Chinese, keeps only clean English text + labels, outputs `cleaned_text_object_dataset.jsonl`.
+* `train_model.py`: Trains a model on the cleaned data and saves it as `text_model.pkl` for the main program.
+
+**`Game/` – Unity demo**
+
+* `HandFromVectors.cs`: UDP client; parses JSON from Python, reconstructs joint positions and visualizes them with spheres and lines.
+* `PinchGrabBall.cs`: Turns any 3D object into a “pinchable” object, handling grab/follow/release and smooth motion.
+* `HandOrbitCamera.cs`: Uses pinch to control camera rotation and zoom.
+* `ModelLibrary.cs`: Maintains a name → GameObject dictionary and provides `ShowModelByLabel(label)` for directly using text inference results.
+* `TextQueryClient_TMP.cs`: TextMeshPro-based text input client, talks to the Python text server.
+* `RuntimeModelLoader.cs`: Loads GLB models by index from `StreamingAssets/models` at runtime to expand the model library.
+
+---
+
+## 2. Tech Stack
+
+### 2.1 Python side
+
+* Python 3.x
+* OpenCV (`cv2`) – camera capture + HUD drawing
+* MediaPipe Hands – hand keypoint detection
+* NumPy – vector operations, statistics (median, EMA, etc.)
+* scikit-learn – text features (`HashingVectorizer`) + linear classifier (`SGDClassifier`)
+* joblib – serialize model + label encoder (`text_model.pkl`)
+* socket / socketserver – UDP + TCP communication
+* pyserial – serial communication with Arduino
+
+Main Python files:
+
+* `hand_udp.py` – main hand tracking + UDP streaming
+* `hand_easy.py` – depth estimation demo / debugging
+* `collect_data.py` / `clean_dataset.py` / `train_model.py` / `run_model.py` – text model data & training toolchain
+* `text_infer_server.py` – text inference TCP server
+* `main.py` – combines hand tracking + text server + serial bridge into a single process
+* `arduino_udp_receive.py` – alternative: standalone UDP → serial bridge
+
+### 2.2 Unity / C# side
+
+* Unity 202x
+* C# scripts:
+
+  * `HandFromVectors.cs` – UDP receiver + hand skeleton reconstruction + GUI tuning
+  * `PinchGrabBall.cs` – grab logic for objects
+  * `HandOrbitCamera.cs` – orbit/zoom camera around a scene target
+  * `ModelLibrary.cs` – treat children/prefabs as a “model dictionary”
+  * `RuntimeModelLoader.cs` – dynamic `.glb` loading with GLTFast
+  * `TextQueryClient.cs` (class `TextQueryClient_TMP`) – Unity-side TCP client + UI for text
+* TextMeshPro – input and text display
+* GLTFast – runtime loading of .glb / .gltf models
+
+### 2.3 Hardware side
+
+* Arduino (Uno / Nano, etc.)
+* One or more simple servos (for demo)
+* Very simple serial protocol: send one ASCII char per update, e.g. `'0'` / `'1'`.
+
+---
+
+## 3. Typical Run Flow
+
+A typical workflow (basically what you’re doing now) is:
+
+1. **Start Python side first** (`main.py`).
+2. In the camera window that pops up, press **`c`** to calibrate, `r` to reset, `q` to quit.
+3. **Then open the Unity project**, and load the `Skin` scene (or your own demo scene).
+4. In Unity, click **Play**:
+
+   * The 3D skeleton hand follows your real hand.
+   * Pinch to rotate the camera or grab objects.
+   * Enter a sentence in the dialog box and the system will generate the corresponding 3D model in front of you.
+
+Details follow.
+
+---
+
+### 3.1 Configure Python Environment
+
+1. Create a virtual environment in the project root (recommended):
+
+   ```bash
+   python -m venv .venv
+   .venv\Scripts\activate
+   ```
+
+2. Install dependencies:
+
+   ```bash
+   pip install -r requirements.txt
+   ```
+
+3. Make sure the camera is accessible by OpenCV / MediaPipe.
+
+---
+
+### 3.2 Start the combined server `main.py`
+
+In the project root:
 
 ```bash
-python -m venv .venv
-source .venv/bin/activate   # Windows 下使用 .venv\Scripts\activate
-pip install -r requirements.txt
+python main.py
 ```
 
-### 3.2 Unity 环境
+You’ll get:
 
-* Unity 版本：使用标准内置渲染管线即可；
-* 把 C# 脚本拖到合适的 GameObject 上，并在 Inspector 里连好引用（例如 `handTracker`、`modelLibrary`、按钮回调等）。
+* A camera preview window with a HUD (FPS, calibration status, etc.).
+* In the background:
+
+  * UDP hand data server (for Unity).
+  * Text TCP server (listening on `127.0.0.1:9009`).
+  * Serial port (if an Arduino is connected).
+
+In the camera window:
+
+* Press **`c`**:
+
+  * Open your palm, face the camera, keep still; it samples about 50 frames.
+  * The terminal asks you for the real wrist-to-camera distance (meters), e.g. `0.45`.
+  * It uses the median palm width/length to compute `k_w` / `k_l`, which are later used to estimate Z.
+
+* Press **`r`**: reset calibration.
+
+* Press **`q`**: exit Python side.
+
+After calibration, HUD text changes from “Calib: NOT SET” to something like “Calib: OK”.
 
 ---
 
-## 4. 典型运行流程（软件部分）
+### 3.3 Open the Unity scene
 
-1. **启动 Python 手部追踪**
+1. Open the project in Unity. The main demo scene is typically `Skin.unity`.
+   The scene should contain:
 
-   ```bash
-   python hand_two_hands_z_udp.py
+   * An object with `HandFromVectors`:
+
+     * `listenPort = 5065` (must match Python).
+     * `targetCamera` set (usually the main camera).
+
+   * The main camera with `HandOrbitCamera` attached.
+
+   * A node with `ModelLibrary`; its children are model templates (their names usually match label names).
+
+   * A UI Canvas with `TextQueryClient_TMP` attached, pointing to the TMP input field and buttons.
+
+2. Click **Play**:
+
+   * You’ll see 3D hand bones (spheres + lines) in the camera view.
+   * When you pinch (thumb + index):
+
+     * If a `PinchGrabBall` object is nearby, it gets grabbed and follows your hand.
+     * If nothing is grabbed, `HandOrbitCamera` interprets pinch as camera control—moving your hand rotates the view.
+
+3. In the UI, click the button to open the dialog, enter an English description, for example:
+
+   ```text
+   a green apple
    ```
 
-   看到摄像头画面、HUD 显示 FPS。按 `c` 校准深度，按 `r` 重置标定。
+   and click confirm:
 
-2. **启动文本推理服务器**
-
-   ```bash
-   python text_infer_server.py
-   ```
-
-   这会加载 `text_model.pkl`，监听来自 Unity 的 TCP 请求。
-
-3. **在 Unity 里运行场景**
-
-   * 场景中放一个挂有 `HandFromVectors` 的对象，端口与 Python UDP 设置一致；
-   * 主摄像机挂 `HandOrbitCamera`，把 `handTracker` 指向上面的对象，把 `target` 设成你要围绕看的物体或一个空物体；
-   * 一个空物体挂 `ModelLibrary`，把所有候选模型作为子物体；
-   * 一个 UI 控制器挂 `TextQueryClient_TMP`，把按钮、输入框、`modelLibrary` 都绑好。
-
-此时你可以：
-
-* 举起手，看到 Unity 里实时重建的 3D 手；
-* pinch 时旋转 / 缩放相机视角；
-* 在 UI 对话框里输入一句话，看到对应模型被生成在你面前，并用 pinch 抓起来移动。
+   * Unity sends this string to `127.0.0.1:9009`.
+   * Python runs the text model and returns something like `102|0.93`.
+   * `TextQueryClient_TMP` parses `label = "102"` and calls `ModelLibrary.ShowModelByLabel("102")`.
+   * `ModelLibrary` / `RuntimeModelLoader` spawn the corresponding model in front of the camera and auto-attach `PinchGrabBall` so you can pinch it.
 
 ---
 
-## 5. 未来：硬件接口预留
+### 3.4 Connect Arduino
 
-当前仓库已经实现了 **Python ↔ Unity** 的数据通道。下一步计划是：
+1. Flash a simple serial control sketch on Arduino, e.g.:
 
-* 在 Python 侧增加一个 TCP / UDP → 串口的桥接脚本，把 Unity 的指令转发给 Arduino；
-* 协议形式可以是 `"finger,angle\n"` 或类似格式，由硬件团队与软件共同约定；
-* 用这些命令驱动自制手套 / 机械结构，做力反馈、灯光或其他教学反馈。
+   * `Serial.begin(9600);`
+   * `if (Serial.available()) char c = Serial.read();`
+   * If `c == '1'` → servo turns to 45°, if `c == '0'` → servo returns to 0°.
 
-这部分目前处于设计阶段，尚未在仓库中实现，但上层架构已经为此预留了空间。
+2. In `main.py` or `arduino_udp_receive.py`, change `COM9` to your actual serial port.
+
+3. Run Python:
+
+   * When hand tracking works, `on_payload` or `arduino_udp_receive` will send `'1'` / `'0'` according to pinch state.
+   * You should see the servo move as you pinch / release.
 
 ---
 
-## 🎤 英文 1–2 分钟项目口头介绍稿
+## 4. Main Python Scripts (by function)
 
-下面是你可以在 demo、答辩或者路演时使用的一段英文介绍，默认是“对评委讲解整个软件 & Unity 工作流程”的口吻：
+### 4.1 Hand tracking: `hand_udp.py`
+
+Summary:
+
+* Opens the camera and uses MediaPipe Hands to detect multiple hands.
+
+* For each frame it computes:
+
+  * Palm width / palm length (pixels)
+  * Finger curl `curl` (0–1)
+  * Side pose `side` (0–1)
+  * Palm/backs-of-hand orientation `palm_front`
+  * Wrist depth `Z` (meters)
+  * 20 bone direction vectors (unit vectors)
+  * `pinch` (thumb + index pinch or not)
+
+* Packs it into JSON and sends via UDP to:
+
+  * Unity port (default 5065)
+  * Arduino UDP bridge port (default 5066)
+
+Key points:
+
+* **Calibration logic**
+
+  * Uses a `CalibState` struct to store sampled palm widths/lengths, `k_w`, `k_l`, etc.
+  * When you press `c`, it samples for a while, then asks for the real distance and computes `k_w = d_real * w_med` and similar.
+  * For depth estimation, it uses two channels `Z ≈ k_w / palm_width` and `Z ≈ k_l / palm_length`, then fuses them based on curl / side.
+
+* **Pinch detection**
+
+  * Typically checks the distance between `thumb_tip` and `index_tip`. If below threshold, it’s pinch.
+  * Writes `"pinch": true/false` directly into the JSON.
+
+* **`on_payload` callback** (registered in `main.py`)
+
+  * Receives the whole JSON per frame, can count how many hands are pinching and do post-processing (e.g. serial output).
 
 ---
 
-Let me give you a quick overview of our software pipeline and how it connects to Unity.
+### 4.2 Depth estimation demo: `hand_easy.py`
 
-Our system has two brains: one in Python, and one in Unity.  
-On the Python side, we use MediaPipe to track the hands in real time and estimate how far the wrist is from the camera in meters. We also compute pinch gestures and bone directions for each finger, for up to two hands. Every frame, Python packs this into a compact JSON message and sends it to Unity over UDP.   
+This is for “pulling the depth estimation piece out” and playing with it separately, without UDP or Unity.
 
-Unity receives this stream with a script called `HandFromVectors`. It reconstructs a full 3D skeleton with 21 joints and 20 bones for each hand, draws small spheres in the scene, and exposes simple APIs like “is this hand pinching?” or “where is joint 8 in world space?”. That lets us treat the real hand like a 3D controller.   
+Important functions:
 
-Interaction is handled by a couple of small components. `PinchGrabBall` can be attached to any object we want to grab. When any hand pinches near that object, it’s “picked up” and smoothly follows the hand, with a bit of tolerance so brief tracking glitches don’t drop it. `HandOrbitCamera` uses the same pinch signals to drive the camera: with one pinching hand you orbit around the target; with two pinching hands you zoom in and out, as long as nothing is currently grabbed.   
+* `compute_palm_width_and_length(...)` – computes palm width & length in pixels given landmarks; used as depth proxies.
+* `compute_curl(...)` – uses finger joint angles to determine whether the hand is open or in a fist.
+* `compute_side(...)` – detects whether the hand faces the camera or is turned sideways.
+* `fuse_depth(Zw, Zl, curl, side, palm_front, ...)` – fuses the two depth channels into a final `Z_final` with weighting and correction terms.
+* `draw_hud(...)` – prints all intermediate values on the image for easier tuning and understanding.
 
-On top of that, we add a lightweight text-to-object layer. In Unity, a small UI script opens a dialog box where the user types an English description. The text is sent over TCP to a Python server with a simple character-level model trained on our own dataset. The server returns a label like “apple” or “023”, and Unity uses `ModelLibrary` to activate the corresponding prefab in front of the camera and automatically make it grabbable with pinch.   
+---
 
-Finally, we have reserved space in the architecture for a hardware interface. In the next step, the same signals that now drive virtual objects and camera motion will also be mapped to serial commands for a glove or other teaching devices, so the virtual interaction in Unity can directly trigger real-world feedback.
+### 4.3 Text model pipeline
 
-In short, the software stack links camera, AI models, Unity interaction, and—soon—physical hardware into one continuous loop.
+* **Raw data**: `text_object_dataset.jsonl`
+  Each line is a JSON record: `{"text": "...", "label": "101"}`, containing both Chinese and English.
+
+* `collect_data.py`: interactively add data.
+
+* `clean_dataset.py`: filters out samples containing Chinese characters, writes to `cleaned_text_object_dataset.jsonl`.
+
+* `train_model.py`: trains / incrementally trains an `SGDClassifier` on the cleaned data, saves to `text_model.pkl`, and prints training metrics.
+
+* `run_model.py`: tests the model on the command line, printing top-k labels + probabilities for given sentences.
+
+* **`text_infer_server.py`**:
+
+  * Loads the model once at startup.
+  * Exposes a TCP server:
+
+    * For each line of text it receives → runs inference → returns `"label|prob\n"`.
+
+---
+
+### 4.4 Combined entry: `main.py`
+
+`main.py` glues three directions together:
+
+1. **Hand tracking + UDP**: starts the tracking loop from `tools.hand_udp`.
+
+2. **Serial bridge**: registers `on_payload(payload)`:
+
+   * Counts whether any hand is pinching in the JSON.
+   * If yes → `ser.write(b"1")`; otherwise → `ser.write(b"0")`.
+
+3. **Text TCP server**: uses `TextInferHandler` + `ThreadedTCPServer` to listen on port 9009 for text from Unity.
+
+So you only need to run `python main.py` to support Unity hand tracking + text-driven object generation + hardware feedback all at once.
+
+---
+
+### 4.5 UDP → serial bridge: `arduino_udp_receive.py`
+
+If you don’t want to mix too much logic into `main.py`, you can run this script separately:
+
+* Listens on UDP port 5066 for the same JSON as Unity.
+* Parses the current pinch state.
+* When the state changes, sends `'0'` or `'1'` to the Arduino serial port.
+* Good for debugging the “hardware bridge” in isolation.
+
+---
+
+## 5. Unity Scripts
+
+### 5.1 `HandFromVectors.cs` – UDP receiver + hand skeleton reconstruction
+
+Responsibilities:
+
+* Creates a `UdpClient` to listen on the given port (default 5065).
+
+* Parses JSON from Python:
+
+  * `wrist` pixel coordinates + normalized coords + `z_m` (depth)
+  * 20 bone direction vectors (unit vectors)
+  * `pinch` / `is_left` flags
+
+* Uses:
+
+  * Camera intrinsics (via Unity `Camera` projection).
+  * Pre-configured bone lengths.
+
+  to reconstruct 21 joint positions in Unity world space.
+
+* Dynamically creates:
+
+  * Sphere array `jointObjects` to visualize joints.
+  * `LineRenderer` array `boneLines` to draw bones.
+
+* Exposes API:
+
+  * `TryGetJointPosition(handIndex, jointIndex, out Vector3 pos)`
+  * `bool IsPinching(handIndex)`
+  * `bool AnyHandPinching`
+
+It also draws a GUI window in-scene that lets you:
+
+* Adjust each bone’s length.
+* Toggle debug options.
+* See how many hands are active and their pinch states.
+
+---
+
+### 5.2 `PinchGrabBall.cs` – grabbing objects
+
+Attach this script to any GameObject and assign a `handTracker`; the object becomes pinch-grabbable:
+
+* When not yet grabbed:
+
+  * Iterate all hands and check if any pinching hand has its control joint (`controlJointIndex`, index fingertip by default) within `grabDistance` of the object.
+  * If so, treat that as “grabbed”, and record:
+
+    * Which hand grabbed it: `grabbedHandIndex`
+    * Initial offset from the follow joint to the object: `grabOffset`
+
+* While grabbed:
+
+  * If `usePhysics` is enabled:
+
+    * Disable gravity on its `Rigidbody`, zero out velocity, and drive it by position interpolation.
+
+  * If not using physics:
+
+    * Directly use `Vector3.Lerp` to move `transform.position` toward the target, controlled by `followSmoothing`.
+
+* `pinchReleaseGrace` protects against MediaPipe glitches:
+
+  * Short pinch dropouts that immediately recover will not drop the object.
+  * The object is released only if the pinch has been off for longer than the grace time.
+
+The script has a static counter `grabbedCount`; other scripts (e.g. camera control) can query `AnyObjectGrabbed` to know if anything is currently being held.
+
+---
+
+### 5.3 `HandOrbitCamera.cs` – hand-driven camera
+
+Attach this to the camera so that pinch gestures control the camera whenever nothing is grabbed:
+
+* Choose a joint (default: index fingertip) as the control point.
+* Record the hand position and yaw/pitch at the moment pinch starts.
+* While pinch is held:
+
+  * Map hand movement on screen to yaw / pitch.
+  * Clamp pitch to avoid flipping behind the head.
+  * Adjust radius `radius` based on zoom gestures or depth change to push/pull the camera.
+
+Final camera update:
+
+```csharp
+orbitCamera.transform.position = pivot + dir.normalized * radius;
+orbitCamera.transform.LookAt(pivot, Vector3.up);
 ```
+
+---
+
+### 5.4 `ModelLibrary.cs` – prefab library
+
+Design: attach this script to an empty GameObject and put all model prefabs as its children:
+
+* In `Awake()`:
+
+  * Collect all child `GameObject`s into a `Dictionary<string, GameObject>` keyed by their names.
+  * `SetActive(false)` on all children, treating them as templates.
+
+* `ShowModelByLabel(string label)`:
+
+  * Find the template by label.
+  * If there’s already a displayed instance, hide or deactivate it.
+  * Spawn the new object near `spawnAnchor.position + spawnOffset`.
+  * Ensure it has `PinchGrabBall` attached and configure:
+
+    * `handTracker`
+    * `grabDistance`
+    * `usePhysics`
+
+With this, the label returned by the text model directly determines which prefab appears in the scene.
+
+---
+
+### 5.5 `RuntimeModelLoader.cs` – runtime GLB loading
+
+Used to “load models on the fly instead of baking all of them into the scene”.
+
+Main interfaces:
+
+* `MakeFileName(int index)`:
+
+  * Default is `101 → "101.glb"`, but you can replace this with more complex mapping (e.g. via a table).
+
+* `LoadByIndexAsync(int index)`:
+
+  * Builds a path (usually under `Application.streamingAssetsPath`).
+  * Uses `GltfImport` to load the GLB.
+  * Instantiates it as a `GameObject`.
+  * If `currentInstance` exists, destroys the old one first.
+  * Parents the new object under the loader and zeroes `localPosition` / `localRotation`.
+
+* `LoadByIndex(int index)`:
+
+  * Convenience wrapper: `_ = LoadByIndexAsync(index);` (ignores `await`).
+
+If you have a batch of `.glb` files in StreamingAssets, you can directly map labels to filenames and truly load them on demand in Unity.
+
+---
+
+### 5.6 `TextQueryClient_TMP` – Unity text TCP client
+
+Attach this to a UI GameObject; it uses TMP input + buttons to talk to the Python text service.
+
+Flow:
+
+1. `OpenDialog()`:
+
+   * `dialogPanel.SetActive(true)` and focus the input field.
+
+2. Button click → `OnClickSend()`:
+
+   * Read user text from `descriptionInput.text`.
+   * Start `SendQueryCoroutine(q)`.
+
+3. Inside `SendQueryCoroutine`:
+
+   * Use `TcpClient` to connect to `serverIp:serverPort` (default `127.0.0.1:9009`).
+   * Send `q + "\n"` in UTF-8.
+   * Block until one line of response is read.
+   * Parse `<label>|<prob>`.
+   * If `modelLibrary` is bound, call `modelLibrary.ShowModelByLabel(label)`.
+   * Optionally show the prediction on a TMP text widget.
+
+4. `OnDestroy()` closes the stream and socket.
+
+---
+
+## 6. Data & Protocols
+
+### 6.1 UDP JSON (Python → Unity)
+
+* Ports: 5065 (Unity) / 5066 (Arduino UDP bridge)
+* Encoding: UTF-8 JSON
+* Top-level fields: `timestamp`, `fps`, `num_hands`, `hands`
+* Each hand contains:
+
+  * `id` – hand index
+  * `is_left` – whether it is a left hand
+  * `wrist` – `{px, py, nx, ny, z_m}`
+  * `bones` – list of `{from, to, vx, vy, vz}`
+  * `pinch` – bool
+
+### 6.2 Text TCP (Unity ↔ Python)
+
+* Address: `127.0.0.1:9009`
+* Request: one line of text + `\n`
+* Response: `<label>|<probability>\n`
+
+Example:
+
+```text
+a small red apple\n
+→ 101|0.923\n
+```
+
+### 6.3 Serial (Python → Arduino)
+
+* Baud rate: 9600
+* Data: single-byte ASCII char
+
+  * `'1'` – at least one hand is pinching
+  * `'0'` – no hand is pinching
+
+How Arduino interprets this is up to you; the example here is driving a servo to different angles.
+
+---
+
+## 7. Dataset & Object IDs
+
+* `object_models_csv.csv`:
+
+  * Maintains a table “object ID → English name → category”, e.g.:
+
+    * `101, red apple, fruit`
+    * `203, tomato, vegetable`
+    * …
+
+  * Used to align:
+
+    * Text dataset labels
+    * GLB filenames
+    * Unity prefab names
+
+* `text_object_dataset.jsonl` / `cleaned_text_object_dataset.jsonl`:
+
+  * Can be extended over time to train stronger text models.
+  * Current cleaning logic is: simply filter out Chinese samples and keep only English sentences.
+
+---
+
+## 8. Future Directions
+
+From an engineering perspective, this repo already connects three “worlds”:
+
+> Camera world → Algorithm world → Virtual world → (future) Hardware world
+
+Possible extensions:
+
+* **Semantic upgrades**
+
+  * Replace the current simple `HashingVectorizer + SGDClassifier` with semantic retrieval or large-model embeddings.
+  * Truly support mixed Chinese/English input so children can describe in Chinese and the system internally maps to English.
+
+* **Gesture upgrades**
+
+  * Beyond pinch, add more dynamic gestures like fist, pointing, waving.
+  * Map gestures to different teaching interactions (select, confirm, delete, etc.).
+
+* **Content generation**
+
+  * Generate whole teaching levels at once instead of single objects.
+  * Use the object CSV + text descriptions to generate contextual scenes for kids (kitchen, supermarket, classroom, …).
+
+* **Hardware feedback**
+
+  * More complex gloves, vibration motors, brake/force devices to “materialize” virtual objects in the real world.
+  * Map Unity collisions and task completion events to multi-channel hardware feedback.
+
+* **Online learning**
+
+  * Log user sentences and chosen objects, and continue fine-tuning the text classifier.
+  * Let the system gradually adapt to each user’s way of speaking.
+
+---
+
+## 9. From OneTouchReality to SecondTouchReality
+
+OneTouchReality started as a full **“VR hand-gesture controlled robotic arm system”**:
+Camera + MediaPipe for hand recognition → UDP sends 21 keypoints to Unity → Unity reconstructs the 3D hand and does collision detection → TCP sends “which finger, how much force” back to Python → Arduino controls 5 servos to turn virtual collisions into real pulling forces on the fingers.
+
+1. **Vision pipeline preserved but cleaned up**
+
+   * Python still uses MediaPipe for hand keypoints and pose estimation, but no longer dumps all 21 points into Unity. Instead it extracts:
+
+     * Real-world wrist distance (meters)
+     * 20 bone direction vectors
+     * Discrete states like pinch / no pinch
+
+   * The distance estimation module inherits OneTouchReality’s idea of “palm width / palm length dual channels + weighted fusion + median/EMA filtering”, but wraps it as `hand_easy.py`, with `c` for calibrate, `r` for reset, `q` for quit, so it’s easy to reuse in other projects.
+
+2. **Interaction logic: from “robotic arm” to “teaching objects + grabbing + camera control”**
+
+   * Unity side uses `HandFromVectors.cs` to receive JSON from Python, reconstruct 21 joint positions from bone directions and lengths, and draw a virtual hand with spheres and lines.
+
+   * `PinchGrabBall.cs` implements “pinch to make it follow your hand”:
+
+     * Among all pinching hands, find the one closest to the object as the “grabbing hand”.
+     * Record the finger-to-object offset.
+     * Update the model position based on joint position + offset with smoothing, using either rigidbody physics or direct interpolation.
+
+   * `HandOrbitCamera.cs` turns pinch into a “general gesture mouse”:
+
+     * Single-hand pinch → orbit the camera around the target.
+     * Two-hand pinch → change camera radius (pinch-to-zoom).
+     * While any object is grabbed by `PinchGrabBall`, camera temporarily stops reacting to avoid conflicts.
+
+3. **From “collision-sensing glove” to “scene that understands language”**
+
+   * In the original project, Unity detected which tags finger bones collided with, then sent which fingers and how much force to Python/Arduino.
+
+   * In SecondTouchReality we shift the focus to **“text → object”**:
+
+     * `collect_data.py` interactively gathers “description + label” pairs.
+     * `clean_dataset.py` filters non-English samples, leaving only `text` / `label`.
+     * `train_model.py` trains a lightweight multi-class model with `HashingVectorizer + SGDClassifier` and produces `text_model.pkl`.
+     * `text_infer_server.py` opens a TCP service that receives descriptions from Unity and returns labels in real time.
+
+   * On Unity side, `TextQueryClient_TMP.cs`:
+
+     * Shows a TMP input dialog.
+     * Sends user text over TCP to the Python text server.
+     * On receiving a label, calls `ModelLibrary.ShowModelByLabel()` to activate the corresponding 3D model.
+     * Displays the result in the UI and pops a short “success” panel.
+
+4. **Hardware chain: from multi-servo cable tightening → single-channel pinch signal**
+
+   * OneTouchReality’s end goal is 5-servo cable pulling to simulate fingertip haptics, requiring full mechanical design, cable management, springs and anti-twist structure.
+
+   * In this derived project, we first **complete the signal chain**:
+
+     * `hand_udp.py` marks each hand’s pinch state in every JSON frame.
+     * `arduino_udp_receive.py` or `main.py` register a callback: when any hand transitions between “not pinching → pinching” or vice versa, they send a single character over serial: `'1'` means tighten, `'0'` means release.
+     * Arduino runs a minimal servo sketch: `'1'` → 45°, `'0'` → 0°.
+
+   * With this, you can tie one string to your fingertip and close the loop:
+
+     > Camera → Python → Unity → Arduino → Finger
+
+     to test latency, stability and safety first, then gradually scale to multi-servo and more complex mechanisms.
+
+5. **Integration: `main.py` = one-click full pipeline**
+
+   * `main.py` (essentially `combined_server.py`) runs four things in one process:
+
+     1. Start `tools.hand_udp`: camera + MediaPipe + hand depth + pinch detection, send JSON to Unity via UDP.
+     2. In `on_payload`, extract pinch state and send `'0'/'1'` to Arduino on edge changes.
+     3. Start the text inference TCP server so Unity can request models by natural language.
+     4. Manage serial lifecycle and exceptions (auto-retry on disconnection / safe close).
+
+Conceptually, SecondTouchReality is a **teachable, extensible, fast-experiment mini trunk** carved out of the full OneTouchReality chain:
+
+* Camera → hand geometry & depth
+* Text description → object label
+* Unity scene → grabbing / camera / teaching levels
+* Pinch → single or multi-servo feedback
+
+Later you can plug these modules back into a “full-size” force-feedback glove system, or treat this as a base for an **AI-driven interactive teaching platform**.
+
+---
+
+`SecondTouchReality` is essentially an **end-to-end playground prototype**: every module is simple enough to hack on freely, yet the chain is complete enough for you to experience the full loop from camera to virtual object to physical feedback.
