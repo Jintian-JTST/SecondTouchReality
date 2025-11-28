@@ -81,7 +81,7 @@ def main():
     cap.set(cv2.CAP_PROP_FRAME_HEIGHT, 720)
 
     if not cap.isOpened():
-        print("无法打开摄像头")
+        print("Cannot open camera")
         return
 
     calib = CalibState()
@@ -107,7 +107,7 @@ def main():
             while True:
                 ok, frame = cap.read()
                 if not ok:
-                    print("读取摄像头失败")
+                    print("Failed to read frame from camera.")
                     break
 
                 frame = cv2.flip(frame, 1)
@@ -137,10 +137,10 @@ def main():
                         l_med = float(np.median(calib.samples_l))
 
                         print("=" * 60)
-                        print("标定采样结束，请保持刚才姿态不动。")
-                        print(f"中位数掌宽: {w_med:.2f} px")
-                        print(f"中位数掌长: {l_med:.2f} px")
-                        d_real = float(input("请输入此时掌根到摄像头的真实距离(米): ").strip())
+                        print("Sampling complete.")
+                        #print(f": {w_med:.2f} px")
+                        #print(f"中位数掌长: {l_med:.2f} px")
+                        d_real = float(input("Please enter the real distance (meters): ").strip())
 
                         calib.w_ref_open = w_med
                         calib.l_ref_open = l_med
@@ -148,8 +148,8 @@ def main():
                         calib.k_l = d_real * l_med
                         calib.samples_w.clear()
                         calib.samples_l.clear()
-                        print(f"标定完成: k_w={calib.k_w:.4f}, k_l={calib.k_l:.4f}")
-                        print("=" * 60)
+                        #print(f"Calibration complete: k_w={calib.k_w:.4f}, k_l={calib.k_l:.4f}")
+                        #print("=" * 60)
 
                 if res.multi_hand_landmarks:
                     for hi, (hand_lms, handed) in enumerate(
@@ -288,10 +288,11 @@ def main():
                     calib.sampling = True
                     calib.samples_w.clear()
                     calib.samples_l.clear()
-                    print("=" * 60)
-                    print("开始标定：")
-                    print("请将单手掌 **完全张开、正对摄像头**，保持不动。")
-                    print("会自动采样约 50 帧，结束后在终端输入真实距离(米)。")
+                    #print("=" * 60)
+                    #print("开始标定：")
+                    print("Please open your palm completely and face the camera.")
+                    print("It will automatically sample about 50 frames.")
+                    print("After that, enter the real distance (meters) in the terminal.")
                     print("=" * 60)
                 elif key == ord("r"):
                     calib.k_w = calib.k_l = None
@@ -302,13 +303,13 @@ def main():
                     for st in states.values():
                         st.z_hist.clear()
                         st.z_ema = None
-                    print("标定已重置。")
+                    print("Calibration reset.")
 
     finally:
         cap.release()
         cv2.destroyAllWindows()
         sock.close()
-        print("退出。")
+        print("Exiting...")
 
 
 if __name__ == "__main__":
