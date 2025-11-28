@@ -28,6 +28,8 @@ import time
 from collections import defaultdict
 
 from hand_easy import (CalibState,RuntimeState,compute_palm_width_and_length,compute_curl,compute_side,compute_face_sign,fuse_depth,clamp)
+# hand_udp.py 顶部
+on_payload = None  # 外部可以把一个函数丢进来，每帧拿到 JSON
 
 WIN_NAME = "Hand UDP Vectors (Multi-hand + Pinch)"
 
@@ -264,6 +266,14 @@ def main():
                     "num_hands": len(hands_out),
                     "hands": hands_out,
                 }
+
+
+                if on_payload is not None:
+                    try:
+                        on_payload(payload)
+                    except Exception as e:
+                        print("on_payload error:", e)
+
                 try:
                     data = json.dumps(payload).encode("utf-8")
                     sock.sendto(data, (UDP_IP, UDP_PORT))
