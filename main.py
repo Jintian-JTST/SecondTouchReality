@@ -12,9 +12,9 @@ import time
 import serial
 from serial.serialutil import SerialException
 
-import hand_udp
-from text_infer_server import TextInferHandler, ThreadedTCPServer, HOST, PORT
-from arduino_udp_receive import send_to_arduino, extract_pinch_data
+import tools.hand_udp
+from tools.text_infer_server import TextInferHandler, ThreadedTCPServer, HOST, PORT
+from tools.arduino_udp_receive import send_to_arduino, extract_pinch_data
 SERIAL_PORT = 'COM9'
 BAUD_RATE = 9600
 ser = None
@@ -43,8 +43,8 @@ def on_hand_payload(payload):
 
 
 def start_hand_thread():
-    hand_udp.on_payload = on_hand_payload
-    t = threading.Thread(target=hand_udp.main, daemon=True)
+    tools.hand_udp.on_payload = on_hand_payload
+    t = threading.Thread(target=tools.hand_udp.main, daemon=True)
     t.start()
     print("[combined] Hand tracking thread started.")
     return t
